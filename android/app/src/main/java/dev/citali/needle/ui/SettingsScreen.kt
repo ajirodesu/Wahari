@@ -5,6 +5,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +54,11 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     val history by historyFlow.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var packs by remember { mutableStateOf(NeedlePrefs.toolPacks(context)) }
+    // Tool catalogues are rebuilt from scratch on every call, so count each
+    // pack once instead of on every recomposition (e.g. each keystroke below).
+    val packToolCounts = remember(context) {
+        PhoneTools.Pack.entries.associateWith { PhoneTools.tools(context, setOf(it)).size }
+    }
     var maxTokens by remember { mutableStateOf(NeedlePrefs.maxNewTokens(context).toFloat()) }
     var showReasoning by remember { mutableStateOf(NeedlePrefs.showReasoning(context)) }
     var telegramToken by remember { mutableStateOf(NeedlePrefs.telegramToken(context)) }
@@ -132,7 +139,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             PhoneTools.Pack.entries.forEach { pack ->
                 ToggleRow(
                     title = pack.label,
-                    subtitle = "${pack.summary} · ${PhoneTools.tools(context, setOf(pack)).size} tools",
+                    subtitle = "${pack.summary} · ${packToolCounts[pack] ?: 0} tools",
                     checked = pack in packs,
                     onCheckedChange = { enabled ->
                         packs = if (enabled) packs + pack else packs - pack
@@ -251,8 +258,17 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                             entry.command.take(46),
                             style = WahariTypography.sectionSubtitle,
                             modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            softWrap = true,
                         )
-                        Text(entry.status, style = WahariTypography.optionTag)
+                        Text(
+                            entry.status,
+                            style = WahariTypography.optionTag,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
                     }
                 }
                 WahariTextButton(text = "Clear history", onClick = { scope.launch { HistoryStore.clear(context) } })

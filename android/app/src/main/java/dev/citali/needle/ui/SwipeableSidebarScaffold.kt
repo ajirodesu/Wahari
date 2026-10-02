@@ -81,7 +81,6 @@ fun SwipeableSidebarScaffold(
 
     /** Release with velocity: spring from the current position, then sync state. */
     fun releaseSettle(velocityPx: Float) {
-        android.util.Log.d("DrawerDbg", "releaseSettle vPx=$velocityPx prog=${progress.value}")
         val v = velocityPx * direction
         val threshold = flingThresholdPx()
         val target = when {
@@ -93,13 +92,16 @@ fun SwipeableSidebarScaffold(
         settling = true
         settleJob?.cancel()
         settleJob = scope.launch {
-            val vv = (velocityPx / widthPx.coerceAtLeast(1f)).coerceIn(-8f, 8f)
-            progress.animateTo(
-                if (target) 1f else 0f,
-                spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
-                initialVelocity = vv,
-            )
-            settling = false
+            try {
+                val vv = (velocityPx / widthPx.coerceAtLeast(1f)).coerceIn(-8f, 8f)
+                progress.animateTo(
+                    if (target) 1f else 0f,
+                    spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+                    initialVelocity = vv,
+                )
+            } finally {
+                settling = false
+            }
             onOpenChange(target)
         }
     }
@@ -108,19 +110,22 @@ fun SwipeableSidebarScaffold(
     LaunchedEffect(open) {
         if (!dragging && abs(progress.value - (if (open) 1f else 0f)) > 0.001f) {
             settleJob?.cancel()
+            settling = false
             settleJob = scope.launch {
-                progress.animateTo(
-                    if (open) 1f else 0f,
-                    spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
-                )
+                try {
+                    progress.animateTo(
+                        if (open) 1f else 0f,
+                        spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+                    )
+                } finally {
+                    settling = false
+                }
             }
         }
     }
 
     Box(Modifier.fillMaxSize()) {
-        content()
-
-        // ---- Open detector: full page, above content, consumes only after a
+        // ---- Open detector: full page, consumes only after a
         // ---- clearly-horizontal slop; children keep priority via consumed-check.
         if (gesturesEnabled && !open) {
             Box(
@@ -210,6 +215,9 @@ fun SwipeableSidebarScaffold(
                     },
             )
         }
+
+        content()
+
 
         // ---- Scrim + close layer. Above chat (blocks its touches), below drawer.
         if (shown) {

@@ -136,16 +136,19 @@ fun DraggableBottomSheet(
                         ?: SheetValue.Partial
                 }
             }
-            offset.animateTo(
-                anchorPx(target),
-                animationSpec = spring(
-                    dampingRatio = 0.85f,
-                    stiffness = Spring.StiffnessMediumLow,
-                ),
-                initialVelocity = velocityPx.coerceIn(-12000f, 12000f),
-            )
-            dismissPx = 0f
-            settling = false
+            try {
+                offset.animateTo(
+                    anchorPx(target),
+                    animationSpec = spring(
+                        dampingRatio = 0.85f,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    initialVelocity = velocityPx.coerceIn(-12000f, 12000f),
+                )
+            } finally {
+                dismissPx = 0f
+                settling = false
+            }
             onValueChange(target)
         }
     }
@@ -155,13 +158,17 @@ fun DraggableBottomSheet(
         if (!settling && abs(offset.value - anchorPx(value)) > 1f && !dragging) {
             settleJob?.cancel()
             settleJob = scope.launch {
-                offset.animateTo(
-                    anchorPx(value),
-                    animationSpec = spring(
-                        dampingRatio = 0.85f,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                )
+                try {
+                    offset.animateTo(
+                        anchorPx(value),
+                        animationSpec = spring(
+                            dampingRatio = 0.85f,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                    )
+                } finally {
+                    settling = false
+                }
             }
         }
     }
@@ -222,7 +229,10 @@ fun DraggableBottomSheet(
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 // Hand the leftover fling to the sheet so the motion continues.
-                settleSheet(available.y)
+                // NOTE: the framework reports this velocity sign-inverted relative
+                // to drag deltas (verified on-device: a downward release fling
+                // arrives negative), so negate it into pointer coordinates.
+                settleSheet(-available.y)
                 return available
             }
         }
@@ -255,26 +265,32 @@ fun DraggableBottomSheet(
                                     settling = true
                                     settleJob?.cancel()
                                     settleJob = scope.launch {
-                                        animate(
-                                            initialValue = dismissPx,
-                                            targetValue = target,
-                                            animationSpec = spring(0.85f, Spring.StiffnessMediumLow),
-                                            initialVelocity = (v?.x ?: 0f).coerceIn(-12000f, 12000f),
-                                        ) { frame, _ -> dismissPx = frame }
-                                        dismissPx = 0f
-                                        settling = false
+                                        try {
+                                            animate(
+                                                initialValue = dismissPx,
+                                                targetValue = target,
+                                                animationSpec = spring(0.85f, Spring.StiffnessMediumLow),
+                                                initialVelocity = (v?.x ?: 0f).coerceIn(-12000f, 12000f),
+                                            ) { frame, _ -> dismissPx = frame }
+                                        } finally {
+                                            dismissPx = 0f
+                                            settling = false
+                                        }
                                         onValueChange(SheetValue.Closed)
                                     }
                                 } else {
                                     settling = true
                                     settleJob?.cancel()
                                     settleJob = scope.launch {
-                                        animate(
-                                            initialValue = dismissPx,
-                                            targetValue = 0f,
-                                            animationSpec = spring(0.85f, Spring.StiffnessMediumLow),
-                                        ) { frame, _ -> dismissPx = frame }
-                                        settling = false
+                                        try {
+                                            animate(
+                                                initialValue = dismissPx,
+                                                targetValue = 0f,
+                                                animationSpec = spring(0.85f, Spring.StiffnessMediumLow),
+                                            ) { frame, _ -> dismissPx = frame }
+                                        } finally {
+                                            settling = false
+                                        }
                                     }
                                 }
                             } else {

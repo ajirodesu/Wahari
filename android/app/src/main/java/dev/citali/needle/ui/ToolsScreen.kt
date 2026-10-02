@@ -30,6 +30,9 @@ fun ToolsContent(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val packs = remember { NeedlePrefs.toolPacks(context) }
     val output = remember { mutableStateListOf<String>() }
+    // The catalogue is rebuilt on every call; describe it only when the
+    // enabled packs change instead of on each keystroke or output update.
+    val toolLines = remember(context, packs) { PhoneTools.describe(context, packs) }
 
     var permissions by remember { mutableStateOf(DevicePermissions.missing(context)) }
     var sayText by remember { mutableStateOf("Hello from Wahari") }
@@ -168,10 +171,10 @@ fun ToolsContent(modifier: Modifier = Modifier) {
 
         Section(
             title = "Tools the model can call",
-            subtitle = "${PhoneTools.tools(context, packs).size} declared with the tool packs you enabled.",
+            subtitle = "${toolLines.size} declared with the tool packs you enabled.",
         ) {
-            PhoneTools.describe(context, packs).forEach { line ->
-                Text(line, style = WahariTypography.sectionSubtitle)
+            toolLines.forEach { line ->
+                Text(line, style = WahariTypography.sectionSubtitle, softWrap = true)
             }
             Text(
                 "Change packs in Settings if the engine reports that the tool list does not fit.",

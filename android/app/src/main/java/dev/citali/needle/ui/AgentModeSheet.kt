@@ -179,7 +179,7 @@ private fun OptionCard(
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(48.dp)
                 .padding(top = 2.dp)
                 .clip(CircleShape)
                 .background(if (selected) WahariTokens.accent else WahariTokens.bgIcon),

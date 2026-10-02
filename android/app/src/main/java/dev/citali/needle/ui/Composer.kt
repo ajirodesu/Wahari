@@ -62,7 +62,7 @@ import kotlin.math.roundToInt
 
 /**
  * Wahari composer capsule. One [BasicTextField] instance is shared between Mode A
- * (single line, 44dp total) and Mode B (stacked, lines x 22 + 62) via movable content,
+ * (single line, 48dp total) and Mode B (stacked, lines x 22 + 66) via movable content,
  * so text, caret, selection, focus and the keyboard survive every mode switch.
  *
  * @param windowWidth real window width; the mode threshold always uses the final

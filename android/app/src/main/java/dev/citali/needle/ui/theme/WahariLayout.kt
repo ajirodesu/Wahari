@@ -24,8 +24,8 @@ object WahariLayout {
     val navBand = 56.dp
     /** Horizontal padding of nav rows (plus any display-cutout inset). */
     val navSide = 14.dp
-    /** Nav circle buttons. */
-    val navButton = 44.dp
+    /** Nav circle buttons. LastChat ChromePill. */
+    val navButton = 48.dp
     val navIcon = 20.dp
 
     /** Chat list gaps. */
@@ -41,31 +41,31 @@ object WahariLayout {
     val dockTop = 16.dp
     val dockBottomMin = 24.dp
 
-    /** Composer capsule: 44dp tall including its border, 22dp radius in both modes. */
-    val capsuleHeight = 44.dp
+    /** Composer capsule: 48dp tall including its border, 22dp radius in both modes. LastChat ChromePill. */
+    val capsuleHeight = 48.dp
     val modeALeftPad = 4.dp
     val modeARightPad = 6.dp
     val modeBTopPad = 12.dp
     val modeBRightPad = 10.dp
     val modeBLeftPad = 8.dp
     val modeBToolbarGap = 8.dp
-    val toolbarHeight = 32.dp
-    /** Fixed row content in Mode A: 4 pad + 44 grid + 36 mic + 32 send + 6 pad = 122dp. */
-    val modeAFixedContent = 122.dp
+    val toolbarHeight = 36.dp
+    /** Fixed row content in Mode A: 4 pad + 44 grid + 36 mic + 36 send + 6 pad = 126dp. */
+    val modeAFixedContent = 126.dp
     /** Capsule border eats 2dp of the width. */
     val capsuleBorder = 2.dp
     /** Text width in Mode B: capsule width minus left/right padding and border. */
     val modeBTextOverhead = 20.dp
     /** Composer line box. */
     val composerLine = 22.dp
-    /** Capsule height = visibleLines x 22 + 62. */
-    val modeBChrome = 62.dp
+    /** Capsule height = visibleLines x 22 + 66. */
+    val modeBChrome = 66.dp
     val composerMaxLines = 6
 
     /** Icon boxes and glyphs. */
     val iconBox = 24.dp
     val capsuleIcon = 20.dp
-    val sendCircle = 32.dp
+    val sendCircle = 36.dp
     val sendGlyph = 17.dp
     val popupIcon = 14.dp
     val optionIcon = 20.dp

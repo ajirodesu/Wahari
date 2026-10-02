@@ -10,6 +10,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -100,7 +102,10 @@ fun KeyValue(label: String, value: String) {
             label,
             style = WahariTypography.assistantBullet.copy(fontSize = androidx.compose.ui.unit.TextUnit.Unspecified),
             color = WahariTokens.textMuted,
-            maxLines = 1,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            softWrap = true,
+            modifier = Modifier.weight(1f),
         )
         Text(
             value,
@@ -108,6 +113,7 @@ fun KeyValue(label: String, value: String) {
             color = WahariTokens.textPrimary,
             modifier = Modifier.weight(1f),
             textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            softWrap = true,
         )
     }
 }
@@ -174,12 +180,15 @@ fun WahariSwitch(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ActionRow(spacing: Int = 8, content: @Composable () -> Unit) {
-    Row(
+    // FlowRow wraps buttons to the next line on narrow screens instead of
+    // overflowing or clipping them. No caller passes weighted children.
+    FlowRow(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(spacing.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(spacing.dp),
     ) { content() }
 }
 
@@ -297,7 +306,7 @@ fun WahariIconButton(
     icon: ImageVector,
     contentDescription: String?,
     iconSize: Dp = 20.dp,
-    buttonSize: Dp = 44.dp,
+    buttonSize: Dp = 48.dp,
     fill: Color = WahariTokens.bgCapsule,
     pressedFill: Color = WahariTokens.bgCapsulePressed,
     pressScale: Float = 0.93f,
@@ -334,11 +343,24 @@ fun WahariTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        label?.let {
-            Text(it, style = WahariTypography.optionTag.copy(color = WahariTokens.textMuted))
-        }
         val fieldInteraction = remember { MutableInteractionSource() }
         val focused by fieldInteraction.collectIsFocusedAsState()
+        label?.let {
+            Text(
+                it,
+                style = WahariTypography.optionTag.copy(
+                    color = if (focused) WahariTokens.accent else WahariTokens.textMuted,
+                ),
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+        }
+        val resolvedOptions =
+            if (singleLine && keyboardOptions == KeyboardOptions.Default) {
+                KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done)
+            } else {
+                keyboardOptions
+            }
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -358,7 +380,7 @@ fun WahariTextField(
             singleLine = singleLine,
             minLines = minLines,
             maxLines = maxLines,
-            keyboardOptions = keyboardOptions,
+            keyboardOptions = resolvedOptions,
             keyboardActions = keyboardActions,
             interactionSource = fieldInteraction,
             decorationBox = { inner ->

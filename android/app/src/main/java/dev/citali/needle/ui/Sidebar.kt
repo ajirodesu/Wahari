@@ -67,7 +67,7 @@ fun SidebarDrawer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(statusTop)
-                    .background(WahariTokens.sidebarTopInsetGradient()),
+                    .background(WahariTokens.bgDrawer),
             )
             Row(
                 modifier = Modifier
@@ -90,7 +90,7 @@ fun SidebarDrawer(
                 ).value
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .graphicsLayer { scaleX = gearScale; scaleY = gearScale }
                         .clip(CircleShape)
                         .background(WahariTokens.bgCapsule)

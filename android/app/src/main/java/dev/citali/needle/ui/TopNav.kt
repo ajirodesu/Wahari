@@ -43,7 +43,7 @@ fun TopNav(
                 icon = WahariIcons.menu,
                 contentDescription = "Open sidebar",
                 iconSize = 20.dp,
-                buttonSize = 44.dp,
+                buttonSize = 48.dp,
                 fill = WahariTokens.bgCapsule,
                 onClick = onMenu,
             )
@@ -52,7 +52,7 @@ fun TopNav(
                 icon = WahariIcons.rotateCcw,
                 contentDescription = "New chat",
                 iconSize = 20.dp,
-                buttonSize = 44.dp,
+                buttonSize = 48.dp,
                 fill = WahariTokens.bgCapsule,
                 onClick = onNewChat,
             )
@@ -81,7 +81,7 @@ fun PageNav(
                 icon = WahariIcons.arrowLeft,
                 contentDescription = "Back",
                 iconSize = 20.dp,
-                buttonSize = 44.dp,
+                buttonSize = 48.dp,
                 fill = WahariTokens.bgCapsule,
                 onClick = onBack,
             )

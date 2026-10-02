@@ -1,0 +1,250 @@
+++ ls apk/Wahari-0.0.3-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
+++ head -n 1
++ apk=apk/Wahari-0.0.3-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
++ echo 'Artifact: apk/Wahari-0.0.3-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk'
+Artifact: apk/Wahari-0.0.3-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
++ echo '---- native code in the APK ----'
+---- native code in the APK ----
++ unzip -l apk/Wahari-0.0.3-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk 'lib/*'
+Archive:  apk/Wahari-0.0.3-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+    10096  1981-01-01 01:01   lib/arm64-v8a/libandroidx.graphics.path.so
+  1292904  1981-01-01 01:01   lib/arm64-v8a/libc++_shared.so
+     7112  1981-01-01 01:01   lib/arm64-v8a/libdatastore_shared_counter.so
+  1180152  1981-01-01 01:01   lib/arm64-v8a/libneedlejni.so
+    10760  1981-01-01 01:01   lib/x86_64/libandroidx.graphics.path.so
+  1252080  1981-01-01 01:01   lib/x86_64/libc++_shared.so
+     6224  1981-01-01 01:01   lib/x86_64/libdatastore_shared_counter.so
+     5376  1981-01-01 01:01   lib/x86_64/libneedlejni.so
+---------                     -------
+  3764704                     8 files
++ echo '---- device ----'
+---- device ----
++ adb shell getprop ro.product.cpu.abi
+x86_64
++ adb shell getprop ro.build.version.release
+14
++ echo '---- install ----'
+---- install ----
++ adb install -r -g apk/Wahari-0.0.3-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
+Performing Streamed Install
+Success
++ echo '---- launch ----'
+---- launch ----
++ adb shell am start -W -n com.ajirodesu.wahari/.MainActivity
+Starting: Intent { cmp=com.ajirodesu.wahari/.MainActivity }
+Error type 3
+Error: Activity class {com.ajirodesu.wahari/com.ajirodesu.wahari.MainActivity} does not exist.
++ sleep 20
++ echo '---- process ----'
+---- process ----
+++ adb shell pidof com.ajirodesu.wahari
+++ tr -d '\r'
++ pid=
++ '[' -z '' ']'
++ echo '::error::Wahari is not running after launch'
+::error::Wahari is not running after launch
++ adb logcat -d -v brief
++ tail -n 200
+I/SP      ( 1559): Download stopped: content_cache:3514c1e9a5c7d614d5646bd12032bfa6, succeeded, size: 1801
+I/CredManSysServiceImpl(  523): CredentialManagerServiceImpl constructed for: com.google.android.gms/.auth.api.credentials.credman.service.PasswordAndPasskeyService
+I/CredManSysServiceImpl(  523): newServiceInfoLocked, mInfo null, com.google.android.gms/com.google.android.gms.auth.api.credentials.credman.service.PasswordAndPasskeyService
+D/ActivityManager(  523): freezing 3165 com.google.android.webview:webview_service
+I/SnapshotHandler( 1418): Unable to retrieve flag snapshot for com.google.android.gms.auth.easyunlock, using defaults.
+I/AiAiEcho( 1698): AppFetcherImpl onPackageChanged com.google.android.gms.
+I/AiAiEcho( 1698): AppIndexer Package:[com.google.android.gms] UserProfile:[0] Enabled:[true].
+I/AiAiEcho( 1698): AppFetcherImplV2 updateApps package:[com.google.android.gms], userId:[0], reason:[package is updated.].
+I/logd    (    0): logdr: UID=2000 GID=2000 PID=3966 n tail=0 logMask=99 pid=0 start=0ns deadline=0ns
+D/CompatibilityChangeReporter(  523): Compat change id reported: 168419799; UID 10123; state: DISABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 273564678; UID 10123; state: DISABLED
+I/RemoteProvisionSysSvc(  523): getRegistration(android.hardware.security.keymint.IRemotelyProvisionedComponent/default)
+D/CompatibilityChangeReporter( 3945): Compat change id reported: 171979766; UID 10123; state: ENABLED
+D/CompatibilityChangeReporter( 3945): Compat change id reported: 242716250; UID 10123; state: ENABLED
+I/adbd    (  417): jdwp connection from 3945
+D/CompatibilityChangeReporter(  523): Compat change id reported: 265195908; UID 10123; state: ENABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 170503758; UID 10123; state: ENABLED
+W/.gms.persistent( 1418): Long monitor contention with owner lowpool[5] (3004) at cvdh cvdh.a(android.content.ContentResolver, android.net.Uri, java.lang.Runnable)(:com.google.android.gms@231818047@23.18.18 (190800-535401451):3) waiters=1 in cvdh cvdh.a(android.content.ContentResolver, android.net.Uri, java.lang.Runnable) for 157ms
+D/ApplicationLoaders( 3945): Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+D/ApplicationLoaders( 3945): Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+D/nativeloader( 3945): InitLlndkLibrariesProduct: libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libRS.so:libandroid_net.so:libbinder_ndk.so:libc.so:libcgrouprc.so:libclang_rt.asan-x86_64-android.so:libcom.android.tethering.connectivity_native.so:libdl.so:libft2.so:liblog.so:libm.so:libmediandk.so:libnativewindow.so:libneuralnetworks.so:libselinux.so:libsync.so:libvndksupport.so:libvulkan.so
+D/nativeloader( 3945): Configuring product-clns-6 for unbundled product apk /product/priv-app/AndroidAutoStubPrebuilt/AndroidAutoStubPrebuilt.apk. target_sdk_version=34, uses_libraries=, library_path=/product/priv-app/AndroidAutoStubPrebuilt/lib/x86_64:/product/lib64:/system/product/lib64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.projection.gearhead:/product/lib64:/system/product/lib64
+D/nativeloader( 3945): InitVndkspLibrariesProduct: android.hardware.common-V2-ndk.so:android.hardware.common.fmq-V1-ndk.so:android.hardware.graphics.allocator-V2-ndk.so:android.hardware.graphics.common-V4-ndk.so:android.hardware.graphics.common@1.0.so:android.hardware.graphics.common@1.1.so:android.hardware.graphics.common@1.2.so:android.hardware.graphics.composer3-V1-ndk.so:android.hardware.graphics.mapper@2.0.so:android.hardware.graphics.mapper@2.1.so:android.hardware.graphics.mapper@3.0.so:android.hardware.graphics.mapper@4.0.so:android.hardware.renderscript@1.0.so:android.hidl.memory.token@1.0.so:android.hidl.memory@1.0-impl.so:android.hidl.memory@1.0.so:android.hidl.safe_union@1.0.so:libRSCpuRef.so:libRSDriver.so:libRS_internal.so:libbase.so:libbcinfo.so:libblas.so:libc++.so:libcompiler_rt.so:libcutils.so:libdmabufheap.so:libgralloctypes.so:libhardware.so:libhidlbase.so:libhidlmemory.so:libion.so:libjsoncpp.so:liblzma.so:libprocessgroup.so:libunwindstack.so:libutils.so:libutilscallstack.so:libz.so
+W/.gms.persistent( 1418): Long monitor contention with owner lowpool[5] (3004) at cvdh cvdh.a(android.content.ContentResolver, android.net.Uri, java.lang.Runnable)(:com.google.android.gms@231818047@23.18.18 (190800-535401451):3) waiters=2 in cvdh cvdh.a(android.content.ContentResolver, android.net.Uri, java.lang.Runnable) for 152ms
+I/RegistrationProxy(  523): onServiceConnected: com.android.rkpdapp.service.RemoteProvisioningService
+I/RegistrationProxy(  523): IGetRegistrationCallback.onSuccess
+I/servicemanager(    0): Found android.hardware.security.keymint.IRemotelyProvisionedComponent/default in device VINTF manifest.
+I/RemoteProvisionSysSvc(  523): Fetching key 10131 for client 82441360
+I/RegistrationProxy(  523): getKeyAsync operation started with callback 125907337
+I/RkpdRegistrationBinder( 3640): Key requested for : android.hardware.security.keymint.IRemotelyProvisionedComponent/default, clientUid: 1017, keyId: 10131, callback: 31843391
+I/RkpdRegistrationBinder( 3640): Key successfully assigned to client
+I/RemoteProvisionSysSvc(  523): Successfully fetched key for client 82441360
+V/GraphicsEnvironment( 3945): Currently set values for:
+V/GraphicsEnvironment( 3945):   angle_gl_driver_selection_pkgs=[]
+V/GraphicsEnvironment( 3945):   angle_gl_driver_selection_values=[]
+V/GraphicsEnvironment( 3945): ANGLE GameManagerService for com.google.android.projection.gearhead: false
+V/GraphicsEnvironment( 3945): com.google.android.projection.gearhead is not listed in per-application setting
+V/GraphicsEnvironment( 3945): Neither updatable production driver nor prerelease driver is supported.
+I/NearbySharing( 1468): SharingTileService destroyed [CONTEXT service_id=194 ]
+I/CAR.GH  ( 3945): onCreate
+E/RoleControllerServiceImpl(  843): Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms.supervision, role: android.app.role.SYSTEM_SUPERVISION
+I/ActivityManager(  523): Flag disabled. Ignoring finishAttachApplication from uid: 10123. pid: 3945
+I/resolv  (  337): GetAddrInfoHandler::run: {100 786532 100 983140 10131 0}
+D/TrafficStats( 3336): tagSocket(103) with statsTag=0x1809, statsUid=-1
+D/TrafficStats( 3336): tagSocket(103) with statsTag=0x1809, statsUid=-1
+D/TrafficStats( 3336): tagSocket(103) with statsTag=0x1809, statsUid=-1
+W/EasyUnlock( 1418): [HostValidator] Invalid account list. [CONTEXT service_id=234 ]
+I/SP      ( 1559): Sync for content_cache succeeded in 491 ms: {added: [3514c1e9a5c7d614d5646bd12032bfa6], metadata: true
+I/AiAiEcho( 1698): AppFetcherImpl onPackageChanged com.google.android.tts.
+I/AiAiEcho( 1698): AppFetcherImpl onPackageChanged com.google.android.partnersetup.
+I/AiAiEcho( 1698): AppIndexer Package:[com.google.android.tts] UserProfile:[0] Enabled:[true].
+I/AiAiEcho( 1698): AppFetcherImplV2 updateApps package:[com.google.android.tts], userId:[0], reason:[package is updated.].
+I/SP      ( 1559): GC for 'content_cache' (10) with ttl of 0 ms took 0 ms (0/0/0)
+I/AiAiEcho( 1698): AppIndexer Package:[com.google.android.partnersetup] UserProfile:[0] Enabled:[true].
+I/AiAiEcho( 1698): AppFetcherImplV2 updateApps package:[com.google.android.partnersetup], userId:[0], reason:[package is updated.].
+I/Role    (  843): com.google.android.gms not qualified for android.app.role.SYSTEM_CALL_STREAMING due to missing RequiredComponent{mIntentFilterData=IntentFilterData{mAction='android.telecom.CallStreamingService', mCategories='[]', mDataScheme='null', mDataType='null'}, mMinTargetSdkVersion=1, mFlags='0', mPermission='android.permission.BIND_CALL_STREAMING_SERVICE', mQueryFlags=0, mMetaData=[]}
+E/RoleControllerServiceImpl(  843): Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms, role: android.app.role.SYSTEM_CALL_STREAMING
+I/KeywordsRequiringContentDownload( 1559): KeywordsRequiringContentDownload.writeToDisk():103 Successfully wrote set of 40 keywords requiring update to disk
+I/ContentDownloadTask( 1559): ContentDownloadTask.schedule():579 Scheduling content download task
+I/JobSchedulerImpl( 1559): JobSchedulerImpl.schedule():91 Schedule task: ContentDownload (id=-1440509951). Success.
+I/JobSchedulerImpl( 1559): JobSchedulerImpl$TaskRunnerJobService.onStartJob():204 onStartJob(): ContentDownload.
+I/ContentDownloadTask( 1559): ContentDownloadTask.downloadAndCacheImages():167 Starting content download task
+I/RkpdBootReceiver( 3640): Caught boot intent, waking up.
+I/RkpdSettings( 3640): Setting ID
+D/CompatibilityChangeReporter(  523): Compat change id reported: 261072174; UID 10124; state: DISABLED
+W/Role    (  843): Default holder doesn't have required signing certificate: com.google.android.apps.work.clouddpc:23962F4B43B9857638EA66F4D419518EAE282491ACDA4B94707BD59003C45E58
+I/RkpdBootReceiver( 3640): Queueing a one-time provisioning job for widevine provisioning.
+D/PackageManager(  523): Instant App installer not found with android.intent.action.INSTALL_INSTANT_APP_PACKAGE
+D/PackageManager(  523): Clear ephemeral installer activity
+D/CompatibilityChangeReporter( 3640): Compat change id reported: 194532703; UID 10176; state: ENABLED
+D/CompatibilityChangeReporter( 3640): Compat change id reported: 253665015; UID 10176; state: ENABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 271850009; UID 10176; state: ENABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 253665015; UID 10176; state: ENABLED
+D/ActivityManager(  523): sync unfroze 1825 com.google.android.youtube for 3
+D/ActivityManager(  523): sync unfroze 2620 com.android.chrome for 10
+D/CompatibilityChangeReporter(  523): Compat change id reported: 194532703; UID 10176; state: ENABLED
+D/ConnectivityService(  523): requestNetwork for uid/pid:1000/523 asUid: 10176 activeRequest: null callbackRequest: 97 [NetworkRequest [ REQUEST id=98, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ]] callback flags: 0 order: 2147483647
+D/WifiNetworkFactory(  523): got request NetworkRequest [ REQUEST id=98, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ]
+D/UntrustedWifiNetworkFactory(  523): got request NetworkRequest [ REQUEST id=98, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ]
+D/OemPaidWifiNetworkFactory(  523): got request NetworkRequest [ REQUEST id=98, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ]
+D/MultiInternetWifiNetworkFactory(  523): got request NetworkRequest [ REQUEST id=98, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ]
+D/ConnectivityService(  523): NetReassign [98 : null → 100] [c 0] [a 0] [i 0]
+I/resolv  (  337): GetAddrInfoHandler::run: {100 100 100 983140 10145 0}
+I/resolv  (  337): res_nmkquery: (QUERY, IN, A)
+I/GH.FzeroReceiver( 3945): Handling intent android.intent.action.BOOT_COMPLETED
+I/resolv  (  337): res_nmkquery: (QUERY, IN, AAAA)
+D/CompatibilityChangeReporter( 3945): Compat change id reported: 183155436; UID 10123; state: ENABLED
+I/resolv  (  337): res_nsend: used send_dg 166 terrno: 0
+I/resolv  (  337): doQuery: rcode=0, ancount=8, return value=166
+W/SemanticLocation( 1418): Failed to load ttl file, clearing index [CONTEXT service_id=173 ]
+D/ConnectivityService(  523): requestNetwork for uid/pid:10176/3640 activeRequest: null callbackRequest: 99 [NetworkRequest [ REQUEST id=100, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 10176 RequestorPkg: com.google.android.rkpdapp UnderlyingNetworks: Null] ]] callback flags: 0 order: 2147483647
+I/resolv  (  337): res_nsend: used send_dg 262 terrno: 0
+I/resolv  (  337): doQuery: rcode=0, ancount=8, return value=262
+D/ConnectivityService(  523): NetReassign [100 : null → 100] [c 0] [a 1] [i 0]
+D/WifiNetworkFactory(  523): got request NetworkRequest [ REQUEST id=100, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 10176 RequestorPkg: com.google.android.rkpdapp UnderlyingNetworks: Null] ]
+D/UntrustedWifiNetworkFactory(  523): got request NetworkRequest [ REQUEST id=100, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 10176 RequestorPkg: com.google.android.rkpdapp UnderlyingNetworks: Null] ]
+D/OemPaidWifiNetworkFactory(  523): got request NetworkRequest [ REQUEST id=100, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 10176 RequestorPkg: com.google.android.rkpdapp UnderlyingNetworks: Null] ]
+D/MultiInternetWifiNetworkFactory(  523): got request NetworkRequest [ REQUEST id=100, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10176 RequestorUid: 10176 RequestorPkg: com.google.android.rkpdapp UnderlyingNetworks: Null] ]
+D/PackageManager(  523): Instant App installer not found with android.intent.action.INSTALL_INSTANT_APP_PACKAGE
+D/PackageManager(  523): Clear ephemeral installer activity
+D/CompatibilityChangeReporter( 3945): Compat change id reported: 194532703; UID 10123; state: ENABLED
+W/EasyUnlock( 1418): [EasyUnlockSupportReporterIntentOperation] Invalid account list. [CONTEXT service_id=234 ]
+D/CompatibilityChangeReporter( 3945): Compat change id reported: 253665015; UID 10123; state: ENABLED
+D/CompatibilityChangeReporter( 3640): Compat change id reported: 263076149; UID 10176; state: ENABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 253665015; UID 10123; state: ENABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 194532703; UID 10123; state: ENABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 143937733; UID 10141; state: ENABLED
+D/SharedPreferencesImpl( 1468): Time required to fsync /data/user/0/com.google.android.gms/shared_prefs/AppDataSearch-main-config.xml: [<1: 0, <2: 1, <4: 1, <8: 0, <16: 2, <32: 0, <64: 0, <128: 1, <256: 0, <512: 1, <1024: 0, <2048: 0, <4096: 0, <8192: 0, <16384: 0, >=16384: 0]
+W/YT.MDX.acet( 1825): CastAppId for type 0 not found. Defaulting to mainCastAppId.
+D/BoundBrokerSvc( 1468): onBind: Intent { act=com.google.android.gms.common.BIND_SHARED_PREFS pkg=com.google.android.gms }
+D/BoundBrokerSvc( 1468): Loading bound service for intent: Intent { act=com.google.android.gms.common.BIND_SHARED_PREFS pkg=com.google.android.gms }
+D/Zygote  (  338): Forked child process 3983
+I/ActivityManager(  523): Start proc 3983:com.google.android.gm/u0a141 for broadcast {com.google.android.gm/com.google.android.libraries.internal.growth.growthkit.tiktok.GrowthKitBootCompletedListener_Receiver}
+I/RkpdPeriodicProvisioner( 3640): Waking up; checking provisioning state.
+I/servicemanager(    0): Found android.hardware.security.keymint.IRemotelyProvisionedComponent/default in device VINTF manifest.
+V/RkpdServerInterface( 3640): Requesting data from server. Attempt 1
+I/ogle.android.gm( 3983): Using CollectorTypeCC GC.
+I/DrmHalHidl( 3640): No hidl drm factories found
+W/ogle.android.gm( 3983): Unexpected CPU variant for x86: x86_64.
+W/ogle.android.gm( 3983): Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+I/hwservicemanager(  139): getTransport: Cannot find entry android.hardware.drm@1.0::IDrmFactory/default in either framework or device VINTF manifest.
+E/DrmHalHidl( 3640): Failed to find passthrough drm factories
+V/RkpdServerInterface( 3640): Network request completed successfully.
+I/RkpdPeriodicProvisioner( 3640): Total services found implementing IRPC: 1
+I/RkpdPeriodicProvisioner( 3640): Starting provisioning for com.android.rkpdapp.interfaces.SystemInterface{android.hardware.security.keymint.IRemotelyProvisionedComponent/default}
+I/servicemanager(    0): Since 'android.hardware.drm.IDrmFactory/clearkey' could not be found, trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+I/RkpdKeyPoolStats( 3640): Sufficient keys are available, no CSR needed.
+I/RkpdKeyPoolStats( 3640): PoolStats{keysInUse=1, idealTotalSignedKeys=13, keysToGenerate=0, keysUnassigned=11}
+I/RkpdProvisioner( 3640): Requested number of keys for provisioning: 0
+I/RkpdPeriodicProvisioner( 3640): Logging atom metric for pool status, total: 12, numExpiring: 0, numUnassigned: 11
+I/RkpdPeriodicProvisioner( 3640): Successfully provisioned com.android.rkpdapp.interfaces.SystemInterface{android.hardware.security.keymint.IRemotelyProvisionedComponent/default}
+I/adbd    (  417): jdwp connection from 3983
+I/WM-WorkerWrapper( 3640): Worker result SUCCESS for Work [ id=2dcac4b1-4ea1-4bdf-9b77-42e723378b37, tags={ com.android.rkpdapp.provisioner.PeriodicProvisioner } ]
+I/AiAiEcho( 1698): AppFetcherImpl onPackageChanged com.google.android.apps.youtube.music.
+I/init    (    0): starting service 'vendor.drm-clearkey-service'...
+I/init    (    0): ... started service 'vendor.drm-clearkey-service' has pid 3996
+I/init    (    0): Control message: Processed ctl.interface_start for 'aidl/android.hardware.drm.IDrmFactory/clearkey' from pid: 134 (/system/bin/servicemanager)
+I/ProvidersCache( 2377): Updating roots due to change on user 0at content://com.android.externalstorage.documents
+I/AiAiEcho( 1698): AppIndexer Package:[com.google.android.apps.youtube.music] UserProfile:[0] Enabled:[true].
+I/AiAiEcho( 1698): AppFetcherImplV2 updateApps package:[com.google.android.apps.youtube.music], userId:[0], reason:[package is updated.].
+I/AidlLazyServiceRegistrar( 3996): Registering service android.hardware.drm.IDrmFactory/clearkey
+I/servicemanager(    0): Found android.hardware.drm.IDrmFactory/clearkey in device VINTF manifest.
+I/BpBinder(    0): onLastStrongRef automatically unlinking death recipients:
+I/DrmUtils( 3640): found IDrmFactory. Instance name:[android.hardware.drm.IDrmFactory/clearkey]
+I/DrmUtils( 3640): found IDrmFactory. Instance name:[android.hardware.drm.IDrmFactory/widevine]
+I/WVCdm-DrmFactory(  397): [app][com.google.android.rkpdapp] calling virtual ::ndk::ScopedAStatus wvdrm::hardware::drm::widevine::WVDrmFactory::createDrmPlugin(const Uuid &, const string &, std::shared_ptr< ::aidl::android::hardware::drm::IDrmPlugin> *)
+D/WVCdm   (  397): Instantiating CDM metrics queue
+D/WVCdm   (  397): Instantiating CDM.
+D/WVCdm   (  397): [cdm_engine.cpp(581):QueryStatus] security_level = Default, query_token = WidevineCdmVersion
+I/WVCdm   (  397): [file_utils.cpp(38):Exists] stat failed: ENOENT
+I/WVCdm   (  397): [oemcrypto_adapter_dynamic.cpp(837):Initialize] Level 3 Build Info (v18): {"soc_vendor":"L3_28615","soc_model":"X86 64 bit","ta_ver":"18.1.0+May  1 2023_06:32:45_","uses_opk":false,"tee_os":"none","tee_os_ver":"0.0.0","form_factor":"L3","implementer":"Widevine","fused":false}
+I/WVCdm   (  397): [(0):] Level3 Library 28615 May  1 2023 06:32:45
+D/ActivityManager(  523): freezing 2097 com.android.carrierdefaultapp
+I/WVCdm   (  397): [file_utils.cpp(38):Exists] stat failed: ENOENT
+D/WVCdm   (  397): [file_store.cpp(463):Open] File does not exist: file = /data/vendor/mediadrm/IDM1013/L3/ay64.dat, identifier = 
+I/WVCdm   (  397): [file_utils.cpp(38):Exists] stat failed: ENOENT
+I/WVCdm   (  397): [file_utils.cpp(38):Exists] stat failed: ENOENT
+D/WVCdm   (  397): [file_store.cpp(463):Open] File does not exist: file = /data/vendor/mediadrm/IDM1013/L3/ay64.dat6, identifier = 
+I/WVCdm   (  397): [oemcrypto_adapter_dynamic.cpp(851):Initialize] L3 Initialized. Trying L1.
+W/WVCdm   (  397): [oemcrypto_adapter_dynamic.cpp(864):Initialize] Could not load oemcrypto from path liboemcrypto.so.  dlopen failed: library "liboemcrypto.so" not found
+W/WVCdm   (  397): [oemcrypto_adapter_dynamic.cpp(868):Initialize] Could not load oemcrypto. Falling back to L3.
+E/WVCdm   (  397): [oemcrypto_adapter_dynamic.cpp(1337):ValidateOrInstallL1KeyboxOrCert] L1 not initialized. Falling back to L3
+I/WVCdm   (  397): [file_utils.cpp(38):Exists] stat failed: ENOENT
+W/WVCdm   (  397): [oemcrypto_adapter_dynamic.cpp(1549):OEMCrypto_InitializeAndCheckKeybox] Keybox error: 25. Falling back to L3.
+I/WVCdm   (  397): [oemcrypto_adapter_dynamic.cpp(900):Level1Terminate] L1 Terminate not needed
+D/WVCdm   (  397): [crypto_session.cpp(439):CacheVersion] OEMCrypto version (default security level): 18.1
+D/WVCdm   (  397): [crypto_session.cpp(448):CacheVersion] OEMCrypto version (L3 security level): 18.1
+D/WVCdm   (  397): [cdm_engine.cpp(581):QueryStatus] security_level = Default, query_token = ProvisioningModel
+I/RkpdWidevine( 3640): Not a WV provisioning 4.0 device. No provisioning required.
+D/statsd_drm(  476): statsd_mediadrm skipping empty entry
+I/WVCdm   (  397): [file_utils.cpp(38):Exists] stat failed: ENOENT
+I/WVCdm   (  397): [(0):] L3 Terminate.
+I/WM-WorkerWrapper( 3640): Worker result SUCCESS for Work [ id=40e00650-1177-46c1-9be3-b9cf2f163a56, tags={ com.android.rkpdapp.provisioner.WidevineProvisioner, WidevineProvisioner } ]
+I/NearbyDiscovery( 1418): DiscoveryNearbyMessagesManager failed to background subscribe [CONTEXT service_id=265 ]
+I/NearbyDiscovery( 1418): java.util.concurrent.TimeoutException: Timed out waiting for Task
+I/NearbyDiscovery( 1418): 	at cfsz.o(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+I/NearbyDiscovery( 1418): 	at bbhk.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):25)
+I/NearbyDiscovery( 1418): 	at bbhe.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):3)
+I/NearbyDiscovery( 1418): 	at dtjy.handleMessage(:com.google.android.gms@231818047@23.18.18 (190800-535401451):5)
+I/NearbyDiscovery( 1418): 	at android.os.Handler.dispatchMessage(Handler.java:106)
+I/NearbyDiscovery( 1418): 	at avye.ll(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+I/NearbyDiscovery( 1418): 	at avye.dispatchMessage(:com.google.android.gms@231818047@23.18.18 (190800-535401451):14)
+I/NearbyDiscovery( 1418): 	at android.os.Looper.loopOnce(Looper.java:205)
+I/NearbyDiscovery( 1418): 	at android.os.Looper.loop(Looper.java:294)
+I/NearbyDiscovery( 1418): 	at android.os.HandlerThread.run(HandlerThread.java:67)
+I/Nearby  ( 1418): is blocked device type false, isAuto=false, isIot=false, isLatchsky=false, isChinaWearable=false, isTv=false, isWearable=false (supportWearOs=false), isChromeOsDevice=false (supportChromeOs=false) [CONTEXT service_id=49 ]
+D/BoundBrokerSvc( 1468): onUnbind: Intent { act=com.google.android.gms.common.BIND_SHARED_PREFS pkg=com.google.android.gms }
+W/JobScheduler(  523): Job didn't exist in JobStore: de1afa #u0a176/1 com.google.android.rkpdapp/androidx.work.impl.background.systemjob.SystemJobService
+W/YT.MDX.acet( 1825): CastAppId for type 0 not found. Defaulting to mainCastAppId.
+I/ActivityManager(  523): Background started FGS: Allowed [callingPackage: com.google.android.apps.wellbeing; callingUid: 10120; uidState: BTOP; uidBFSL: [BFSL]; intent: Intent { cmp=com.google.android.apps.wellbeing/com.google.apps.tiktok.concurrent.InternalForegroundService (has extras) }; code:BACKGROUND_ACTIVITY_PERMISSION; tempAllowListReason:<7fd288b android.intent.action.BOOT_COMPLETED/u0,reasonCode:BOOT_COMPLETED,duration:20000,callingUid:1000>; targetSdkVersion:33; callerTargetSdkVersion:33; startForegroundCount:0; bindFromPackage:null: isBindService:false]
+W/YT.MDX.acet( 1825): CastAppId for type 0 not found. Defaulting to mainCastAppId.
+I/system_server(  523): Background concurrent copying GC freed 842545(29MB) AllocSpace objects, 42(1244KB) LOS objects, 48% free, 25MB/49MB, paused 56us,131us total 312.944ms
+V/Backup  ( 1468): [MigrateUtil] Clearing migrate temp dir: /data/user/0/com.google.android.gms/files/migrate_dir
+D/Backup  ( 1468): [MigrateCleaner] D2D transport was not selected, not selecting cloud transport.
+D/CompatibilityChangeReporter(  523): Compat change id reported: 168419799; UID 10141; state: DISABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 273564678; UID 10141; state: DISABLED
+D/CompatibilityChangeReporter( 3983): Compat change id reported: 171979766; UID 10141; state: ENABLED
+D/CompatibilityChangeReporter( 3983): Compat change id reported: 242716250; UID 10141; state: DISABLED
+D/CompatibilityChangeReporter(  523): Compat change id reported: 170503758; UID 10141; state: ENABLED
+D/nativeloader( 3983): Configuring clns-6 for other apk /system/framework/org.apache.http.legacy.jar. target_sdk_version=33, uses_libraries=ALL, library_path=/product/app/PrebuiltGmail/lib/x86_64:/product/app/PrebuiltGmail/PrebuiltGmail.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gm
++ exit 1

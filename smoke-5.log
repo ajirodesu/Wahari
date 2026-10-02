@@ -1,0 +1,250 @@
+++ head -n 1
+++ ls apk/Wahari-0.0.5-d64eb999a014887bb407bfab59c41da06afb8ecc.apk
++ apk=apk/Wahari-0.0.5-d64eb999a014887bb407bfab59c41da06afb8ecc.apk
++ echo 'Artifact: apk/Wahari-0.0.5-d64eb999a014887bb407bfab59c41da06afb8ecc.apk'
+Artifact: apk/Wahari-0.0.5-d64eb999a014887bb407bfab59c41da06afb8ecc.apk
++ echo '---- native code in the APK ----'
+---- native code in the APK ----
++ unzip -l apk/Wahari-0.0.5-d64eb999a014887bb407bfab59c41da06afb8ecc.apk 'lib/*'
+Archive:  apk/Wahari-0.0.5-d64eb999a014887bb407bfab59c41da06afb8ecc.apk
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+    10096  1981-01-01 01:01   lib/arm64-v8a/libandroidx.graphics.path.so
+  1292904  1981-01-01 01:01   lib/arm64-v8a/libc++_shared.so
+     7112  1981-01-01 01:01   lib/arm64-v8a/libdatastore_shared_counter.so
+  1180152  1981-01-01 01:01   lib/arm64-v8a/libneedlejni.so
+    10760  1981-01-01 01:01   lib/x86_64/libandroidx.graphics.path.so
+  1252080  1981-01-01 01:01   lib/x86_64/libc++_shared.so
+     6224  1981-01-01 01:01   lib/x86_64/libdatastore_shared_counter.so
+     5376  1981-01-01 01:01   lib/x86_64/libneedlejni.so
+---------                     -------
+  3764704                     8 files
++ echo '---- device ----'
+---- device ----
++ adb shell getprop ro.product.cpu.abi
+x86_64
++ adb shell getprop ro.build.version.release
+14
++ echo '---- install ----'
+---- install ----
++ adb install -r -g apk/Wahari-0.0.5-d64eb999a014887bb407bfab59c41da06afb8ecc.apk
+Performing Streamed Install
+Success
++ echo '---- launch ----'
+---- launch ----
++ adb shell am start -W -n com.ajirodesu.wahari/.MainActivity
+Starting: Intent { cmp=com.ajirodesu.wahari/.MainActivity }
+Error type 3
+Error: Activity class {com.ajirodesu.wahari/com.ajirodesu.wahari.MainActivity} does not exist.
++ sleep 20
++ echo '---- process ----'
+---- process ----
+++ adb shell pidof com.ajirodesu.wahari
+++ tr -d '\r'
++ pid=
++ '[' -z '' ']'
++ echo '::error::Wahari is not running after launch'
+::error::Wahari is not running after launch
++ adb logcat -d -v brief
++ tail -n 200
+I/ModuleSetMgr( 1481): Download of container feature brella_dynamite is disabled.
+I/ModuleSetMgr( 1481): Download of container feature cameraconnectivity_impl is disabled.
+I/ModuleSetMgr( 1481): Download of container feature dck_management is disabled.
+I/ModuleSetMgr( 1481): Download of container feature easyunlock is disabled.
+I/ModuleSetMgr( 1481): Download of container feature enterprise is disabled.
+I/ModuleSetMgr( 1481): Download of container feature enterprise_zt_mp_complete is disabled.
+I/ModuleSetMgr( 1481): Download of container feature fast_pair is disabled.
+I/ModuleSetMgr( 1481): Download of container feature game_platform is disabled.
+I/ModuleSetMgr( 1481): Download of container feature games is disabled.
+I/ModuleSetMgr( 1481): Download of container feature growth_upgradeparty is disabled.
+I/ModuleSetMgr( 1481): Download of container feature tflite_dynamite is disabled.
+I/ModuleSetMgr( 1481): Download of container feature homegraph is disabled.
+I/ModuleSetMgr( 1481): Download of container feature magictether is disabled.
+I/ModuleSetMgr( 1481): Download of container feature maps_core is disabled.
+I/ModuleSetMgr( 1481): Download of container feature mlkit.docscan.crop is disabled.
+I/ModuleSetMgr( 1481): Download of container feature mlkit.docscan.enhance is disabled.
+I/ModuleSetMgr( 1481): Download of container feature multipackage_debug is disabled.
+I/ModuleSetMgr( 1481): Download of container feature payse is disabled.
+I/ModuleSetMgr( 1481): Download of container feature permissions_debug is disabled.
+I/ModuleSetMgr( 1481): Download of container feature play_cloud_search is disabled.
+I/ModuleSetMgr( 1481): Download of container feature semanticlocation_debug is disabled.
+I/ModuleSetMgr( 1481): Download of container feature tflite_delegate_edgetpu is disabled.
+I/ModuleSetMgr( 1481): Download of container feature tflite_delegate_test is disabled.
+I/ModuleSetMgr( 1481): Download of container feature tflite_gpu_dynamite is disabled.
+I/ModuleSetMgr( 1481): Download of container feature userstatus_impl is disabled.
+I/ModuleSetMgr( 1481): Download of container feature usonia_iam is disabled.
+I/ModuleSetMgr( 1481): Download of container feature vision.face is disabled.
+I/ModuleSetMgr( 1481): Download of container feature vision.ica is disabled.
+I/ModuleSetMgr( 1481): Download of container feature vision.ocr is disabled.
+I/init    (    0): Control message: Processed ctl.stop for 'idmap2d' from pid: 520 (system_server)
+I/init    (    0): Service 'idmap2d' (pid 3934) received signal 9
+I/ModuleSetMgr( 1481): Pending container module APKs: []
+D/ActivityManager(  520): freezing 2458 com.google.android.documentsui
+W/.gms.persistent( 1436): Long monitor contention with owner netscheduler-queue-handler (3461) at void bytb.o(int)(:com.google.android.gms@231818047@23.18.18 (190800-535401451):4) waiters=0 in int bytb.r(byps) for 303ms
+I/GCoreUlr( 1436): WorldUpdater received intent Intent { act=com.google.android.location.reporting.ACTION_UPDATE_WORLD cmp=com.google.android.gms/com.google.android.location.reporting.service.DispatchingService (has extras) } with receiverAction com.google.gservices.intent.action.GSERVICES_CHANGED
+I/ModuleSetMgr( 1481): Pending non-container module APKs: []
+D/BugleRcsEngine( 4311): log_saver already enabled
+I/MobileDataHub( 1481): Scheduling periodic tasks
+I/RecoverableKeyStoreGms( 1481): [RecoverableKeyStoreGmsInitOperation] Setting vault handle
+W/libc    ( 3124): Access denied finding property "persist.adb.tls_server.enable"
+W/libc    ( 3124): Access denied finding property "service.adb.tls.port"
+W/binder:3124_2( 3124): type=1400 audit(0.0:27): avc:  denied  { read } for  name="u:object_r:system_adbd_prop:s0" dev="tmpfs" ino=292 scontext=u:r:gmscore_app:s0:c512,c768 tcontext=u:object_r:system_adbd_prop:s0 tclass=file permissive=0 app=com.google.android.gms
+W/SystemServiceRegistry( 3124): No service published for: persistent_data_block
+W/binder:3124_2( 3124): type=1400 audit(0.0:28): avc:  denied  { read } for  name="u:object_r:adbd_prop:s0" dev="tmpfs" ino=60 scontext=u:r:gmscore_app:s0:c512,c768 tcontext=u:object_r:adbd_prop:s0 tclass=file permissive=0 app=com.google.android.gms
+I/RemoteProvisionSysSvc(  520): getRegistration(android.hardware.security.keymint.IRemotelyProvisionedComponent/default)
+W/PackageParser( 1481): Unknown element under <manifest>: queries at /data/user_de/0/com.google.android.gms/app_chimera/m/00000000/AdsDynamite.apk Binary XML file line #15
+I/RegistrationProxy(  520): onServiceConnected: com.android.rkpdapp.service.RemoteProvisioningService
+I/RegistrationProxy(  520): IGetRegistrationCallback.onSuccess
+I/RemoteProvisionSysSvc(  520): Fetching key 10131 for client 226498616
+I/RegistrationProxy(  520): getKeyAsync operation started with callback 171675665
+I/RkpdRegistrationBinder( 3654): Key requested for : android.hardware.security.keymint.IRemotelyProvisionedComponent/default, clientUid: 1017, keyId: 10131, callback: 89576768
+I/RkpdRegistrationBinder( 3654): Key successfully assigned to client
+I/servicemanager(    0): Found android.hardware.security.keymint.IRemotelyProvisionedComponent/default in device VINTF manifest.
+I/RemoteProvisionSysSvc(  520): Successfully fetched key for client 226498616
+I/HttpGrpcBindableService( 2067): [pfd-write] DOWNLOAD COMPLETE: Downloaded 2452263 bytes from URL [https://gstatic.com/matchmaker/tclib_models/actions/v104/en-us/tc_model_e202592534082c01f9642f709a627dd9.zip].
+I/AstreaHttpConnection( 1675): Download completed for url [https://gstatic.com/matchmaker/tclib_models/actions/v104/en-us/tc_model_e202592534082c01f9642f709a627dd9.zip].
+I/SP.AiAi ( 1675): <==== Finishing job {W:b:u:l, bg}, 1394 ms. elapsed since start
+I/SP.AiAi ( 1675): Download stopped: text-classifier-actions:tc_model_e202592534082c01f9642f709a627dd9, succeeded, size: 2452263
+E/RoleControllerServiceImpl(  836): Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms.supervision, role: android.app.role.SYSTEM_SUPERVISION
+I/Role    (  836): com.google.android.gms not qualified for android.app.role.SYSTEM_CALL_STREAMING due to missing RequiredComponent{mIntentFilterData=IntentFilterData{mAction='android.telecom.CallStreamingService', mCategories='[]', mDataScheme='null', mDataType='null'}, mMinTargetSdkVersion=1, mFlags='0', mPermission='android.permission.BIND_CALL_STREAMING_SERVICE', mQueryFlags=0, mMetaData=[]}
+E/RoleControllerServiceImpl(  836): Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms, role: android.app.role.SYSTEM_CALL_STREAMING
+W/Role    (  836): Default holder doesn't have required signing certificate: com.google.android.apps.work.clouddpc:23962F4B43B9857638EA66F4D419518EAE282491ACDA4B94707BD59003C45E58
+W/PackageParser( 1481): Unknown element under <manifest>: queries at /data/user_de/0/com.google.android.gms/app_chimera/m/00000004/DynamiteModulesC.apk Binary XML file line #15
+I/RecoverableKeyStoreMgr(  520): Initialized server params.
+E/RecoverySnapshotStorage(  520): Error reading snapshot for 10131 from disk
+E/RecoverySnapshotStorage(  520): java.io.FileNotFoundException: /data/system/recoverablekeystore/snapshots/10131.xml: open failed: ENOENT (No such file or directory)
+E/RecoverySnapshotStorage(  520): 	at libcore.io.IoBridge.open(IoBridge.java:574)
+E/RecoverySnapshotStorage(  520): 	at java.io.FileInputStream.<init>(FileInputStream.java:160)
+E/RecoverySnapshotStorage(  520): 	at com.android.server.locksettings.recoverablekeystore.storage.RecoverySnapshotStorage.readFromDisk(RecoverySnapshotStorage.java:152)
+E/RecoverySnapshotStorage(  520): 	at com.android.server.locksettings.recoverablekeystore.storage.RecoverySnapshotStorage.get(RecoverySnapshotStorage.java:104)
+E/RecoverySnapshotStorage(  520): 	at com.android.server.locksettings.recoverablekeystore.RecoverableKeyStoreManager.getKeyChainSnapshot(RecoverableKeyStoreManager.java:369)
+E/RecoverySnapshotStorage(  520): 	at com.android.server.locksettings.LockSettingsService.getKeyChainSnapshot(LockSettingsService.java:2494)
+E/RecoverySnapshotStorage(  520): 	at com.android.internal.widget.ILockSettings$Stub.onTransact(ILockSettings.java:838)
+E/RecoverySnapshotStorage(  520): 	at android.os.Binder.execTransactInternal(Binder.java:1339)
+E/RecoverySnapshotStorage(  520): 	at android.os.Binder.execTransact(Binder.java:1275)
+E/RecoverySnapshotStorage(  520): Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+E/RecoverySnapshotStorage(  520): 	at libcore.io.Linux.open(Native Method)
+E/RecoverySnapshotStorage(  520): 	at libcore.io.ForwardingOs.open(ForwardingOs.java:563)
+E/RecoverySnapshotStorage(  520): 	at libcore.io.BlockGuardOs.open(BlockGuardOs.java:274)
+E/RecoverySnapshotStorage(  520): 	at libcore.io.IoBridge.open(IoBridge.java:560)
+E/RecoverySnapshotStorage(  520): 	... 8 more
+I/RecoverySnapshotLstnrs(  520): Registered listener for agent with uid 10131
+I/resolv  (  336): GetAddrInfoHandler::run: {100 786532 100 983140 10131 0}
+D/TrafficStats( 3124): tagSocket(105) with statsTag=0x1809, statsUid=-1
+D/TrafficStats( 3124): tagSocket(105) with statsTag=0x1809, statsUid=-1
+D/TrafficStats( 3124): tagSocket(105) with statsTag=0x1809, statsUid=-1
+W/MobileDataHub( 1481): [Service] appsupload-periodic periodic task disabled
+I/resolv  (  336): GetAddrInfoHandler::run: {100 786532 100 983140 10131 0}
+D/BoundBrokerSvc( 1436): onUnbind: Intent { act=com.google.android.gms.clearcut.bootcount.service.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.PersistentBoundBrokerService }
+I/resolv  (  336): res_nmkquery: (QUERY, IN, A)
+I/resolv  (  336): resolv_cache_lookup: FOUND IN CACHE entry=0x747577457750
+I/resolv  (  336): doQuery: rcode=0, ancount=1, return value=49
+I/resolv  (  336): res_nmkquery: (QUERY, IN, AAAA)
+I/resolv  (  336): resolv_cache_lookup: FOUND IN CACHE entry=0x747577458650
+I/resolv  (  336): doQuery: rcode=0, ancount=1, return value=61
+D/TrafficStats( 1481): tagSocket(169) with statsTag=0x30004800, statsUid=-1
+D/PackageManager(  520): Instant App installer not found with android.intent.action.INSTALL_INSTANT_APP_PACKAGE
+D/PackageManager(  520): Clear ephemeral installer activity
+D/PackageManager(  520): Instant App installer not found with android.intent.action.INSTALL_INSTANT_APP_PACKAGE
+D/PackageManager(  520): Clear ephemeral installer activity
+I/MS_Utils( 1481): version of com.google.android.apps.maps = 1066937505
+I/MdiSyncModule( 1481): flag handling is skipping irrelevant intent.
+I/NetworkScheduler.Stats( 1436): Task com.google.android.gms/com.google.android.gms.checkin.CheckinService started execution. cause:9 exec_start_elapsed_seconds: 69 [CONTEXT service_id=218 ]
+W/PrereqChecker( 1481): No rear-facing camera detected.
+D/PackageManager(  520): Instant App installer not found with android.intent.action.INSTALL_INSTANT_APP_PACKAGE
+D/PackageManager(  520): Clear ephemeral installer activity
+D/PackageManager(  520): Instant App installer not found with android.intent.action.INSTALL_INSTANT_APP_PACKAGE
+D/PackageManager(  520): Clear ephemeral installer activity
+D/PackageManager(  520): Instant App installer not found with android.intent.action.INSTALL_INSTANT_APP_PACKAGE
+D/PackageManager(  520): Clear ephemeral installer activity
+I/OcrModelUpStIntentOp( 1481): Downloading text recognizer
+I/Vision  ( 1481): Supported ABIS: [x86_64, arm64-v8a]
+E/Vision  ( 1481): Couldn't read checkbot setting: android.provider.Settings$SettingNotFoundException: multi_cb
+I/SystemUpdate( 1481): [Installation,ReceiverIntentOperation] Received intent: Intent { act=com.google.gservices.intent.action.GSERVICES_CHANGED flg=0x1000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.GmsIntentOperationService (has extras) }.
+I/GCoreUlr( 1436): WorldUpdater:com.google.gservices.intent.action.GSERVICES_CHANGED: Ensuring that reporting is stopped because of reasons: (no Google accounts)
+D/BoundBrokerSvc( 1481): onBind: Intent { act=com.google.android.gms.ocr.service.internal.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsInternalApiService }
+D/BoundBrokerSvc( 1481): Loading bound service for intent: Intent { act=com.google.android.gms.ocr.service.internal.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsInternalApiService }
+I/SP.AiAi ( 1675): Scheduling job with delay of 0s for {W:b:I:l, bg}, 1 candidates
+I/GCoreUlr( 1436): Unbound from all signal providers.
+D/PackageManager(  520): Instant App installer not found with android.intent.action.INSTALL_INSTANT_APP_PACKAGE
+D/PackageManager(  520): Clear ephemeral installer activity
+W/healthd (    0): battery l=100 v=5000 t=25.0 h=2 st=2 c=900000 fc=3000000 cc=10 chg=a
+D/ActivityManager(  520): freezing 1134 com.android.bluetooth
+I/GmsDebugLogger( 1481): [53] +vision.ocr:-1
+W/PhenotypeRegOp( 1481): Phenotype bulk registration failed [CONTEXT service_id=231 ]
+W/PhenotypeRegOp( 1481): java.util.concurrent.TimeoutException: Timed out waiting for Task
+W/PhenotypeRegOp( 1481): 	at cfsz.o(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+W/PhenotypeRegOp( 1481): 	at com.google.android.gms.common.config.PhenotypeRegistrationOperation.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+W/PhenotypeRegOp( 1481): 	at com.google.android.gms.common.config.PhenotypeRegistrationOperation.onHandleIntent(:com.google.android.gms@231818047@23.18.18 (190800-535401451):19)
+W/PhenotypeRegOp( 1481): 	at com.google.android.chimera.IntentOperation.onHandleIntent(:com.google.android.gms@231818047@23.18.18 (190800-535401451):2)
+W/PhenotypeRegOp( 1481): 	at zhv.onHandleIntent(:com.google.android.gms@231818047@23.18.18 (190800-535401451):4)
+W/PhenotypeRegOp( 1481): 	at hjm.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):3)
+W/PhenotypeRegOp( 1481): 	at hjl.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):11)
+W/PhenotypeRegOp( 1481): 	at dfhf.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):2)
+W/PhenotypeRegOp( 1481): 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+W/PhenotypeRegOp( 1481): 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+W/PhenotypeRegOp( 1481): 	at java.lang.Thread.run(Thread.java:1012)
+I/SystemUpdate( 1481): [Execution,InstallationEventIntentOperation] Handling event of type 2.
+I/Auth    ( 1481): [WorkAccount] update authenticator enabled for boot or update
+W/SystemServiceRegistry( 1481): No service published for: persistent_data_block
+I/Auth    ( 1481): [FRP,FrpUpdateIntentOperation] FRP is not supported for this device / user
+I/GCoreUlr( 1436): Unbound from all signal providers.
+I/GCoreUlr( 1436): Stopping handler for UlrDispSvcFast
+I/ocess.gservices( 1885): Background concurrent copying GC freed 60011(2062KB) AllocSpace objects, 0(0B) LOS objects, 49% free, 2834KB/5669KB, paused 22us,6us total 143.690ms
+I/SystemUpdate( 1481): [Execution,InstallationIntentOperation] Received intent: Intent { act=com.google.android.gms.update.INSTALL_UPDATE cat=[targeted_intent_op_prefix:.update.execution.InstallationIntentOperation] cmp=com.google.android.gms/.chimera.GmsIntentOperationService }.
+I/SystemUpdate( 1481): [Installation,ReceiverIntentOperation] Received intent: Intent { act=com.google.android.gms.update.BASE_MODULE_INIT cat=[targeted_intent_op_prefix:.update.control.ReceiverIntentOperation] cmp=com.google.android.gms/.chimera.GmsIntentOperationService }.
+I/NetworkScheduler.Stats( 1436): Task com.google.android.gms/com.google.android.gms.checkin.CheckinService finished executing. cause:9 result: 3 elapsed_millis: 159 uptime_millis: 159 exec_start_elapsed_seconds: 69 [CONTEXT service_id=218 ]
+I/GmsDebugLogger( 1481): [101] +mlkit.ocr.common:1
+D/CompatibilityChangeReporter( 1436): Compat change id reported: 247079863; UID 10131; state: DISABLED
+I/SystemUpdate( 1481): [Execution,InstallationEventIntentOperation] Handling event of type 1.
+I/SystemUpdate( 1481): [Control,InstallationControl] Installation progress updated to (0x000, -1.000).
+I/SystemUpdateManagerService(  520): No existing info file /data/system/system-update-info.xml
+I/Checkin ( 1481): [CheckinOperation] Starting Checkin: Default Task Reason : 8 Force : false UserId : 0 Start time : 70312
+E/GmsConnectionFactory( 1436): UID for network attribution might be misset for tag 805307399 [CONTEXT service_id=39 ]
+E/GmsConnectionFactory( 1436): dhwp: FULL
+E/GmsConnectionFactory( 1436): 	at d.N(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+E/GmsConnectionFactory( 1436): 	at aobf.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):14)
+E/GmsConnectionFactory( 1436): 	at aqzt.c(:com.google.android.gms@231818047@23.18.18 (190800-535401451):8)
+E/GmsConnectionFactory( 1436): 	at aqzk.d(:com.google.android.gms@231818047@23.18.18 (190800-535401451):1)
+E/GmsConnectionFactory( 1436): 	at aqzp.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+E/GmsConnectionFactory( 1436): 	at aqzk.b(:com.google.android.gms@231818047@23.18.18 (190800-535401451):5)
+E/GmsConnectionFactory( 1436): 	at aqzk.execute(:com.google.android.gms@231818047@23.18.18 (190800-535401451):8)
+E/GmsConnectionFactory( 1436): 	at aqzk.execute(:com.google.android.gms@231818047@23.18.18 (190800-535401451):7)
+E/GmsConnectionFactory( 1436): 	at apiy.h(:com.google.android.gms@231818047@23.18.18 (190800-535401451):51)
+E/GmsConnectionFactory( 1436): 	at apit.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):3)
+E/GmsConnectionFactory( 1436): 	at aced.c(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+E/GmsConnectionFactory( 1436): 	at aced.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):7)
+E/GmsConnectionFactory( 1436): 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+E/GmsConnectionFactory( 1436): 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+E/GmsConnectionFactory( 1436): 	at acjn.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+E/GmsConnectionFactory( 1436): 	at java.lang.Thread.run(Thread.java:1012)
+I/CheckinUtil( 1481): Classify the device as Phone. [CONTEXT service_id=130 ]
+I/SystemUpdate( 1481): [Control,ReminderDialogControl] Screen-on dialog not enabled.
+I/SystemUpdate( 1481): [Control,DeviceControl] Requesting stop screen-on listening
+I/SystemUpdate( 1436): [Control,ChimeraSystemUpdatePersistentListenerService] Start (command: stop_listener, action: android.intent.action.SCREEN_ON, request ID: reminder
+I/SystemUpdate( 1436): [Control,ChimeraSystemUpdatePersistentListenerService] Got request (reminder) to unregister for action: android.intent.action.SCREEN_ON
+I/SystemUpdate( 1436): [Control,ChimeraSystemUpdatePersistentListenerService] Stopping ChimeraSystemUpdatePersistentListenerService
+I/resolv  (  336): GetAddrInfoHandler::run: {100 786532 100 983140 10131 0}
+W/SystemServiceRegistry( 3124): No service published for: persistent_data_block
+I/resolv  (  336): res_nmkquery: (QUERY, IN, A)
+I/resolv  (  336): res_nmkquery: (QUERY, IN, AAAA)
+I/logd    (    0): logdr: UID=2000 GID=2000 PID=4529 n tail=0 logMask=99 pid=0 start=0ns deadline=0ns
+I/resolv  (  336): res_nsend: used send_dg 177 terrno: 0
+I/resolv  (  336): res_nsend: used send_dg 161 terrno: 0
+I/resolv  (  336): doQuery: rcode=0, ancount=7, return value=161
+I/resolv  (  336): doQuery: rcode=0, ancount=5, return value=177
+D/TrafficStats( 1436): tagSocket(84) with statsTag=0x30000407, statsUid=-1
+I/RecoverableKeyStoreGms( 1481): [EnrollmentManager] Successfully downloaded certificates. [CONTEXT service_id=172 ]
+W/Conscrypt( 1436): Could not set socket write timeout: java.net.SocketException: Socket closed
+D/RecoverableKeyStoreMgr(  520): Root of trust for recovery agent + 10131 is assigned for the first time to GoogleCloudKeyVaultServiceV1
+I/SystemUpdate( 1481): [Execution,ExecutionManager] Action pending executed for 0.19 seconds.
+I/RecoverableKeyStoreMgr(  520): Updating the certificate with the new serial number 10020
+D/RecoverableKeyStoreMgr(  520): Getting and validating a random endpoint certificate
+W/Conscrypt( 1436): 	at com.google.android.gms.org.conscrypt.Platform.setSocketWriteTimeout(:com.google.android.gms@231818047@23.18.18 (190800-535401451):2)
+W/Conscrypt( 1436): 	at com.google.android.gms.org.conscrypt.ConscryptFileDescriptorSocket.setSoWriteTimeout(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+I/SystemUpdate( 1481): [Execution,ExecutionManager] Action finished-execution executed for 0.00 seconds.
+I/SystemUpdate( 1481): [Execution,InstallationIntentOperation] Received intent: Intent { act=com.google.android.gms.update.INSTALL_UPDATE cat=[targeted_intent_op_prefix:.update.execution.InstallationIntentOperation] cmp=com.google.android.gms/.chimera.GmsIntentOperationService }.
+I/SystemUpdate( 1481): [Execution,ExecutionManager] Action finished-execution executed for 0.00 seconds.
+D/RecoverableKeyStoreMgr(  520): Saving the randomly chosen endpoint certificate to database
+I/RecoverableKeyStoreMgr(  520): This is a certificate change. Snapshot didn't exist
++ exit 1

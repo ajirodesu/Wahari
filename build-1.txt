@@ -1,0 +1,6 @@
+run=1
+commit=9e814c7de1f8f5e7994c32b809648f0bbc56e2ac
+ref=main
+weights_sha256=
+weights_size=
+apk_sha256=

@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.citali.needle.ui.theme.WahariIcons
+import dev.citali.needle.ui.theme.WahariLayout
 import dev.citali.needle.ui.theme.WahariTokens
 import dev.citali.needle.ui.theme.WahariTypography
 
@@ -72,15 +73,25 @@ fun SidebarDrawer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
+                    .height(WahariLayout.navBand)
                     .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "Wahari",
-                    style = WahariTypography.sidebarWordmark,
-                    modifier = Modifier.padding(start = 16.dp).weight(1f),
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(WahariLayout.navButton)
+                        .padding(start = 16.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text(
+                        text = "Wahari",
+                        style = WahariTypography.sidebarWordmark,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        softWrap = false,
+                    )
+                }
                 val gearInteraction = remember { MutableInteractionSource() }
                 val gearPressed by gearInteraction.collectIsPressedAsState()
                 val gearScale = animateFloatAsState(
@@ -90,7 +101,7 @@ fun SidebarDrawer(
                 ).value
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(WahariLayout.navButton)
                         .graphicsLayer { scaleX = gearScale; scaleY = gearScale }
                         .clip(CircleShape)
                         .background(WahariTokens.bgCapsule)

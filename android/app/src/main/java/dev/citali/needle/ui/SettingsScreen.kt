@@ -2,12 +2,40 @@ package dev.citali.needle.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.citali.needle.engine.ChatController
 import dev.citali.needle.engine.ModelDownloadController
@@ -366,26 +395,353 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             )
         }
 
-        Section(title = "About") {
-            KeyValue("App", "Wahari · modified by AjiroDesu")
-            KeyValue("Engine", "Needle ${ModelRepository.ENGINE_VERSION} · Apache-2.0 · Cactus Compute")
-            KeyValue("Automation core", "TaskPilot (MIT) by TherealCitali")
-            Text(
-                "https://github.com/TherealCitali",
-                style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.accent),
-            )
-            Text(
-                "Wahari translates your words into phone actions on this device. " +
-                    "Nothing is uploaded: the model, the accessibility snapshots and the history all stay here. " +
-                    "Camera and fingerprint checks are the only actions that need you on screen.",
-                style = WahariTypography.sectionSubtitle,
-            )
-            KeyValue("Foreground app hooks", if (ActivityBridges.hasCamera) "active" else "inactive")
-        }
+        AboutCard(
+            engineVersion = ModelRepository.ENGINE_VERSION,
+            foregroundHooksActive = ActivityBridges.hasCamera,
+        )
     }
 }
 
 private fun Int.spFix() = androidx.compose.ui.unit.TextUnit(this.toFloat(), androidx.compose.ui.unit.TextUnitType.Sp)
+
+/** Premium About card: brand header, spec sheet, privacy promise and provenance. */
+@Composable
+private fun AboutCard(
+    engineVersion: String,
+    foregroundHooksActive: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val uriHandler = LocalUriHandler.current
+    val cardShape = RoundedCornerShape(28.dp)
+    val innerShape = RoundedCornerShape(18.dp)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF1D2028), Color(0xFF141417), Color(0xFF101012)),
+                ),
+            )
+            .border(1.dp, Color(0x2BFFFFFF), cardShape)
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Eyebrow + premium badge
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                "ABOUT",
+                style = WahariTypography.optionTag.copy(
+                    color = WahariTokens.textMuted,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = androidx.compose.ui.unit.TextUnit(1.6f, androidx.compose.ui.unit.TextUnitType.Sp),
+                ),
+            )
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color(0x1F1D88E5))
+                    .border(1.dp, Color(0x551D88E5), CircleShape)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    "STABLE BUILD",
+                    style = WahariTypography.optionTag.copy(
+                        color = Color(0xFF7AB8FF),
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = androidx.compose.ui.unit.TextUnit(0.8f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        fontSize = androidx.compose.ui.unit.TextUnit(10.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    ),
+                )
+            }
+        }
+
+        // Brand header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFF2B9BF0), Color(0xFF155A9C)),
+                        ),
+                    )
+                    .border(1.dp, Color(0x66FFFFFF), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "W",
+                    style = WahariTypography.pageTitle.copy(
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    ),
+                )
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        "Wahari",
+                        style = WahariTypography.sheetTitle.copy(fontSize = androidx.compose.ui.unit.TextUnit(19f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.Verified,
+                        contentDescription = null,
+                        tint = Color(0xFF5AA9FF),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Text(
+                    "Crafted by AjiroDesu",
+                    style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.textSecondary),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF1D88E5))
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
+            ) {
+                Text(
+                    "v$engineVersion",
+                    style = WahariTypography.optionTag.copy(color = Color.White, fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
+
+        Text(
+            "Wahari turns your words into on-device phone actions. The model, accessibility snapshots and history never leave this phone — camera and fingerprint checks are the only steps that need you on screen.",
+            style = WahariTypography.assistantBullet.copy(
+                color = WahariTokens.textSecondary,
+                lineHeight = androidx.compose.ui.unit.TextUnit(21f, androidx.compose.ui.unit.TextUnitType.Sp),
+            ),
+        )
+
+        // Spec sheet
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(innerShape)
+                .background(Color.Black.copy(alpha = 0.32f))
+                .border(1.dp, Color(0x1AFFFFFF), innerShape)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+        ) {
+            AboutMetaRow(icon = Icons.Filled.Smartphone, label = "App", value = "Wahari")
+            AboutDivider()
+            AboutMetaRow(icon = Icons.Filled.Memory, label = "Engine", value = "Needle · Apache-2.0")
+            AboutDivider()
+            AboutMetaRow(icon = Icons.Filled.SmartToy, label = "Automation", value = "TaskPilot (MIT)")
+            AboutDivider()
+            AboutMetaRow(icon = Icons.Filled.Person, label = "Core author", value = "TherealCitali")
+            AboutDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Visibility,
+                    contentDescription = null,
+                    tint = WahariTokens.textMuted,
+                    modifier = Modifier.size(17.dp),
+                )
+                Text(
+                    "Foreground hooks",
+                    style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.textMuted),
+                    modifier = Modifier.weight(1f),
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(
+                            if (foregroundHooksActive) Color(0x224ADE80) else Color(0x228E8E96),
+                        )
+                        .border(
+                            1.dp,
+                            if (foregroundHooksActive) Color(0x554ADE80) else Color(0x338E8E96),
+                            CircleShape,
+                        )
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (foregroundHooksActive) WahariTokens.success else WahariTokens.textMuted,
+                                ),
+                        )
+                        Text(
+                            if (foregroundHooksActive) "Active" else "Inactive",
+                            style = WahariTypography.optionTag.copy(
+                                color = if (foregroundHooksActive) Color(0xFF86EFAC) else WahariTokens.textSecondary,
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+        // Privacy promise
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(innerShape)
+                .background(Color(0x144ADE80))
+                .border(1.dp, Color(0x2E4ADE80), innerShape)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x224ADE80)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Shield,
+                    contentDescription = null,
+                    tint = Color(0xFF86EFAC),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp), modifier = Modifier.weight(1f)) {
+                Text(
+                    "100% offline · Private by design",
+                    style = WahariTypography.assistantBullet.copy(
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = androidx.compose.ui.unit.TextUnit(13.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    ),
+                )
+                Text(
+                    "Nothing is uploaded. Everything stays on this device.",
+                    style = WahariTypography.sectionSubtitle.copy(color = Color(0xFFB7E4C7)),
+                )
+            }
+        }
+
+        // Provenance link
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(innerShape)
+                .background(WahariTokens.bgCard)
+                .border(1.dp, WahariTokens.borderSubtle, innerShape)
+                .clickable { uriHandler.openUri("https://github.com/TherealCitali") }
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(WahariTokens.bgIcon),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Code,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        "Open-source core",
+                        style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.textMuted),
+                    )
+                    Text(
+                        "github.com/TherealCitali",
+                        style = WahariTypography.assistantBullet.copy(
+                            color = WahariTokens.textPrimary,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Filled.OpenInNew,
+                    contentDescription = "Open GitHub",
+                    tint = WahariTokens.accent,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+
+        Text(
+            "© 2026 Wahari · Engine by Cactus Compute",
+            style = WahariTypography.optionTag.copy(color = WahariTokens.textMuted),
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+    }
+}
+
+@Composable
+private fun AboutMetaRow(icon: ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = WahariTokens.textMuted,
+            modifier = Modifier.size(17.dp),
+        )
+        Text(
+            label,
+            style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.textMuted),
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            value,
+            style = WahariTypography.assistantBullet.copy(
+                color = WahariTokens.textPrimary,
+                fontWeight = FontWeight.Medium,
+                fontSize = androidx.compose.ui.unit.TextUnit(13.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+            ),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+        )
+    }
+}
+
+@Composable
+private fun AboutDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(Color(0x14FFFFFF)),
+    )
+}
 
 @Preview(name = "Settings page", widthDp = 412, heightDp = 890)
 @Composable

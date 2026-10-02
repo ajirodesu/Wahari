@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -26,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
@@ -125,7 +128,8 @@ fun Composer(
         ).size.height
         maxOf(1, (h / linePx).roundToInt())
     }
-    val visibleLines = if (!stacked) 1 else measuredLines.coerceIn(2, maxLines.coerceIn(2, 6))
+    val effectiveMaxLines = maxLines.coerceIn(2, 6)
+    val visibleLines = if (!stacked) 1 else measuredLines.coerceIn(1, effectiveMaxLines)
     val capsuleHeight: Dp = if (!stacked) {
         WahariLayout.capsuleHeight
     } else {
@@ -141,6 +145,7 @@ fun Composer(
     val latestField by rememberUpdatedState(field)
     val latestSend by rememberUpdatedState(onSend)
     val latestChange by rememberUpdatedState(onFieldChange)
+    val latestStacked by rememberUpdatedState(stacked)
     val keyHandler = Modifier.onPreviewKeyEvent { event ->
         if (event.key == Key.Enter) {
             // KeyDown only, key repeat ignored, so a held Enter cannot send twice.
@@ -180,17 +185,17 @@ fun Composer(
                     .focusRequester(focusRequester)
                     .onFocusChanged { onFocusedChange(it.isFocused) }
                     .then(keyHandler),
-                textStyle = if (stacked) stackedStyle else inputStyle,
+                textStyle = if (latestStacked) stackedStyle else inputStyle,
                 cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { latestSend() }),
-                singleLine = !stacked,
+                singleLine = !latestStacked,
                 decorationBox = { inner ->
                     Box {
                         if (latestField.text.isEmpty()) {
                             Text(
                                 "Ask Wahari",
-                                style = (if (stacked) stackedStyle else inputStyle)
+                                style = (if (latestStacked) stackedStyle else inputStyle)
                                     .copy(color = WahariTokens.textPlaceholder),
                             )
                         }
@@ -198,6 +203,13 @@ fun Composer(
                     }
                 },
             )
+        }
+    }
+
+    val modeBScrollState = rememberScrollState()
+    LaunchedEffect(text, measuredLines) {
+        if (stacked && measuredLines > visibleLines) {
+            modeBScrollState.animateScrollTo(modeBScrollState.maxValue)
         }
     }
 
@@ -258,7 +270,8 @@ fun Composer(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(viewportH.dp),
+                        .height(viewportH.dp)
+                        .verticalScroll(modeBScrollState),
                 ) {
                     textField()
                 }

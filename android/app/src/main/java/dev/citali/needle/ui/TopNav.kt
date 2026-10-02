@@ -14,10 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.citali.needle.ui.theme.WahariIcons
+import dev.citali.needle.ui.theme.WahariLayout
 import dev.citali.needle.ui.theme.WahariTokens
 import dev.citali.needle.ui.theme.WahariTypography
 
-/** Floating top nav over the chat. Container height = status inset + 56dp. */
+/** Floating top nav over the chat. Container height = status inset + navBand. */
 @Composable
 fun TopNav(
     onMenu: () -> Unit,
@@ -30,20 +31,20 @@ fun TopNav(
             .fillMaxWidth()
             .background(WahariTokens.topNavGradient())
             .padding(top = statusTop)
-            .height(56.dp)
+            .height(WahariLayout.navBand)
             .padding(horizontal = 14.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .height(WahariLayout.navBand),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             WahariIconButton(
                 icon = WahariIcons.menu,
                 contentDescription = "Open sidebar",
                 iconSize = 20.dp,
-                buttonSize = 48.dp,
+                buttonSize = WahariLayout.navButton,
                 fill = WahariTokens.bgCapsule,
                 onClick = onMenu,
             )
@@ -52,7 +53,7 @@ fun TopNav(
                 icon = WahariIcons.rotateCcw,
                 contentDescription = "New chat",
                 iconSize = 20.dp,
-                buttonSize = 48.dp,
+                buttonSize = WahariLayout.navButton,
                 fill = WahariTokens.bgCapsule,
                 onClick = onNewChat,
             )
@@ -60,7 +61,7 @@ fun TopNav(
     }
 }
 
-/** Page variant: single back button left, title centered in the 56dp band. */
+/** Page variant: back button left, title centered. Both are navButton tall, like the chat header buttons. */
 @Composable
 fun PageNav(
     title: String,
@@ -73,24 +74,37 @@ fun PageNav(
             .fillMaxWidth()
             .background(WahariTokens.topNavGradient())
             .padding(top = statusTop)
-            .height(56.dp)
+            .height(WahariLayout.navBand)
             .padding(horizontal = 14.dp),
     ) {
-        Box(modifier = Modifier.align(Alignment.CenterStart)) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .height(WahariLayout.navButton),
+            contentAlignment = Alignment.Center,
+        ) {
             WahariIconButton(
                 icon = WahariIcons.arrowLeft,
                 contentDescription = "Back",
                 iconSize = 20.dp,
-                buttonSize = 48.dp,
+                buttonSize = WahariLayout.navButton,
                 fill = WahariTokens.bgCapsule,
                 onClick = onBack,
             )
         }
-        androidx.compose.material3.Text(
-            text = title,
-            style = WahariTypography.pageTitle,
-            modifier = Modifier.align(Alignment.Center),
-            maxLines = 1,
-        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .height(WahariLayout.navButton),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Text(
+                text = title,
+                style = WahariTypography.pageTitle,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                softWrap = false,
+            )
+        }
     }
 }

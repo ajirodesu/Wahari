@@ -129,7 +129,7 @@ fun ToggleRow(
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = WahariTypography.assistantBody.copy(lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified, color = Color.White))

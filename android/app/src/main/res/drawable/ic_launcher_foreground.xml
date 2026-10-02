@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <!-- Wahari W-agent mark by AjiroDesu. No background here: the background
+         comes from @color/icon_background, so launchers don't double-scale it.
+         The mark is scaled to 0.66 about the center to sit fully inside the
+         adaptive-icon safe zone (central 66%), so no launcher mask crops it. -->
+    <group
+        android:pivotX="512"
+        android:pivotY="512"
+        android:scaleX="0.66"
+        android:scaleY="0.66">
+        <path
+            android:fillColor="#F2F2F2"
+            android:pathData="M150,260 L272,260 L452,760 L330,760 Z" />
+        <path
+            android:fillColor="#F2F2F2"
+            android:pathData="M330,760 L450,760 L572,420 L452,420 Z" />
+        <path
+            android:fillColor="#F2F2F2"
+            android:pathData="M452,420 L572,420 L694,760 L574,760 Z" />
+        <path
+            android:fillColor="#F2F2F2"
+            android:pathData="M574,760 L694,760 L874,260 L754,260 Z" />
+        <path
+            android:strokeColor="#0A0A0C"
+            android:strokeWidth="24"
+            android:pathData="M110,600 L914,500" />
+        <path
+            android:fillColor="#FF5A1F"
+            android:pathData="M452,420 L572,420 L560,470 L464,470 Z" />
+    </group>
+</vector>

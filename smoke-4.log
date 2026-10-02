@@ -1,0 +1,250 @@
+++ head -n 1
+++ ls apk/Wahari-0.0.4-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
++ apk=apk/Wahari-0.0.4-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
++ echo 'Artifact: apk/Wahari-0.0.4-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk'
+Artifact: apk/Wahari-0.0.4-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
++ echo '---- native code in the APK ----'
+---- native code in the APK ----
++ unzip -l apk/Wahari-0.0.4-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk 'lib/*'
+Archive:  apk/Wahari-0.0.4-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+    10096  1981-01-01 01:01   lib/arm64-v8a/libandroidx.graphics.path.so
+  1292904  1981-01-01 01:01   lib/arm64-v8a/libc++_shared.so
+     7112  1981-01-01 01:01   lib/arm64-v8a/libdatastore_shared_counter.so
+  1180152  1981-01-01 01:01   lib/arm64-v8a/libneedlejni.so
+    10760  1981-01-01 01:01   lib/x86_64/libandroidx.graphics.path.so
+  1252080  1981-01-01 01:01   lib/x86_64/libc++_shared.so
+     6224  1981-01-01 01:01   lib/x86_64/libdatastore_shared_counter.so
+     5376  1981-01-01 01:01   lib/x86_64/libneedlejni.so
+---------                     -------
+  3764704                     8 files
++ echo '---- device ----'
+---- device ----
++ adb shell getprop ro.product.cpu.abi
+x86_64
++ adb shell getprop ro.build.version.release
+14
++ echo '---- install ----'
+---- install ----
++ adb install -r -g apk/Wahari-0.0.4-9ca26a5def08471236a98f81141fc2c3a3ddb02a.apk
+Performing Streamed Install
+Success
++ echo '---- launch ----'
+---- launch ----
++ adb shell am start -W -n com.ajirodesu.wahari/.MainActivity
+Starting: Intent { cmp=com.ajirodesu.wahari/.MainActivity }
+Error type 3
+Error: Activity class {com.ajirodesu.wahari/com.ajirodesu.wahari.MainActivity} does not exist.
++ sleep 20
++ echo '---- process ----'
+---- process ----
+++ adb shell pidof com.ajirodesu.wahari
+++ tr -d '\r'
++ pid=
++ '[' -z '' ']'
++ echo '::error::Wahari is not running after launch'
+::error::Wahari is not running after launch
++ adb logcat -d -v brief
++ tail -n 200
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+I/Fitness ( 1398): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+W/IndexDataConverter( 4020): Skipping index for null-key item IndexData.Builder {title: null,package: com.google.android.apps.messaging}
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+W/IndexDataConverter( 4020): Skipping index for null-key item IndexData.Builder {title: null,package: com.google.android.apps.messaging}
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+E/gs.intelligence( 4020): No package ID ff found for resource ID 0xffffffff.
+W/IndexDataConverter( 4020): Skipping index for null-key item IndexData.Builder {title: null,package: com.google.android.apps.messaging}
+I/GCoreUlr( 1398): WorldUpdater:com.google.android.location.internal.server.ACTION_RESTARTED: Ensuring that reporting is stopped because of reasons: (no Google accounts)
+W/IndexDataConverter( 4020): Cannot build sitemap pair for incomplete names dxw@2575f428  Digital Wellbeing & parental controls
+W/IndexDataConverter( 4020): Cannot build sitemap pair for incomplete names dxw@a5d82892  Google
+W/IndexDataConverter( 4020): Cannot build sitemap pair for incomplete names dxw@3d4c8308  Gesture Navigation Sensitivity
+I/system_server(  519): Background young concurrent copying GC freed 654585(22MB) AllocSpace objects, 35(764KB) LOS objects, 42% free, 28MB/49MB, paused 4.218ms,48us total 718.800ms
+I/Fitness ( 1398): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+I/Fitness ( 1398): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+I/Fitness ( 1398): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+I/NetworkScheduler.Stats( 1398): Task com.google.android.gms/com.google.android.gms.ads.social.GcmSchedulerWakeupService finished executing. cause:5 result: 1 elapsed_millis: 375 uptime_millis: 375 exec_start_elapsed_seconds: 71 [CONTEXT service_id=218 ]
+I/Fitness ( 1398): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+I/Fitness ( 1398): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+I/Fitness ( 1398): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+I/GCoreUlr( 1398): Unbound from all signal providers.
+I/Fitness ( 1398): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+I/Fitness ( 1398): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+I/Fitness ( 1398): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+I/Fitness ( 1398): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+I/HttpGrpcBindableService( 2187): Downloading requested for URL 'https://storage.googleapis.com/captions/aiai-en-US-v3003.zip'
+I/HttpGrpcBindableService( 2187): Responding with header information for URL 'https://storage.googleapis.com/captions/aiai-en-US-v3003.zip'
+I/AstreaHttpConnection( 1626): Started download from url='https://storage.googleapis.com/captions/aiai-en-US-v3003.zip'
+D/EGL_emulation(  838): app_time_stats: avg=1854.97ms min=1854.97ms max=1854.97ms count=1
+I/GCoreUlr( 1398): Unbound from all signal providers.
+I/GCoreUlr( 1398): Stopping handler for UlrDispSvcFast
+W/Icing   ( 1454): Failed to get Lockbox signed-in status: java.util.concurrent.TimeoutException: Timed out waiting for Task
+W/Icing   ( 1454): getSignedInAccountName: Falling back to default value
+I/Fitness ( 1398): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+I/Checkin ( 1454): [CheckinOperation] Starting Checkin: Default Task Reason : 5 Force : false UserId : 0 Start time : 72690
+E/RoleControllerServiceImpl(  851): Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms.supervision, role: android.app.role.SYSTEM_SUPERVISION
+I/Role    (  851): com.google.android.gms not qualified for android.app.role.SYSTEM_CALL_STREAMING due to missing RequiredComponent{mIntentFilterData=IntentFilterData{mAction='android.telecom.CallStreamingService', mCategories='[]', mDataScheme='null', mDataType='null'}, mMinTargetSdkVersion=1, mFlags='0', mPermission='android.permission.BIND_CALL_STREAMING_SERVICE', mQueryFlags=0, mMetaData=[]}
+E/RoleControllerServiceImpl(  851): Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms, role: android.app.role.SYSTEM_CALL_STREAMING
+W/Role    (  851): Default holder doesn't have required signing certificate: com.google.android.apps.work.clouddpc:23962F4B43B9857638EA66F4D419518EAE282491ACDA4B94707BD59003C45E58
+I/Fitness ( 1398): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+I/Fitness ( 1398): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+W/MetricsFeatureProvider( 4020): Disabled westworld logs writing!!!
+I/Fitness ( 1398): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+I/Fitness ( 1398): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+I/CheckinUtil( 1454): Classify the device as Phone. [CONTEXT service_id=130 ]
+W/AppSearchIndex( 4020): schedule indexing, force = true
+W/MetricsFeatureProvider( 4020): Disabled westworld logs writing!!!
+D/CompatibilityChangeReporter(  519): Compat change id reported: 161252188; UID 10130; state: DISABLED
+I/NetworkScheduler.Stats( 1398): Task com.google.android.gms/com.google.android.gms.clearcut.uploader.QosUploaderService started execution. cause:5 exec_start_elapsed_seconds: 72 [CONTEXT service_id=218 ]
+I/SemanticLocation( 1398): ULR Settings changed. Updating LH/LR state. [CONTEXT service_id=173 ]
+I/LocationHistory( 1454): [IntentOperation] Module is disabled [CONTEXT service_id=314 ]
+D/BoundBrokerSvc( 1398): onBind: Intent { act=com.google.android.gms.presencemanager.service.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.PersistentApiService }
+D/BoundBrokerSvc( 1398): Loading bound service for intent: Intent { act=com.google.android.gms.presencemanager.service.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.PersistentApiService }
+I/RemoteProvisionSysSvc(  519): getRegistration(android.hardware.security.keymint.IRemotelyProvisionedComponent/default)
++ exit 1

@@ -94,7 +94,7 @@ jobs:
           # arm64-v8a is the only ABI built: the 32-bit archive Cactus publishes
           # is linked against an older libc++ (std::__hash_memory) and does not
           # link with NDK 27.
-          fetch arm64-v8a android-arm64 5e0a5daaadca1fbe1c518110bee6bbb1cc97a5e53a16a1e964d0af0186eac60a
+          fetch arm64-v8a android-arm64 16752fb75adea7af89bbc435a97d1cda7e71bc74d04578d551d0d3bbd5f9e633
           # Keep the licence text that ships next to the engine with the build.
           curl -fL --retry 3 -o ../licenses/Apache-2.0.txt \
             "https://huggingface.co/Cactus-Compute/needle3/resolve/main/LICENSE" || true

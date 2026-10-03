@@ -54,6 +54,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.citali.needle.engine.ChatController
+import dev.citali.needle.engine.EngineSelfTest
 import dev.citali.needle.engine.ModelDownloadController
 import dev.citali.needle.engine.ModelRepository
 import dev.citali.needle.engine.NeedleEngine
@@ -97,6 +98,8 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     var maxTokens by remember { mutableStateOf(NeedlePrefs.maxNewTokens(context).toFloat()) }
     var showReasoning by remember { mutableStateOf(NeedlePrefs.showReasoning(context)) }
     var telegramToken by remember { mutableStateOf(NeedlePrefs.telegramToken(context)) }
+    var selfTestResult by remember { mutableStateOf<EngineSelfTest.Result?>(null) }
+    var selfTesting by remember { mutableStateOf(false) }
     var telegramEnabled by remember { mutableStateOf(NeedlePrefs.telegramEnabled(context)) }
     var adminIdsInput by remember {
         mutableStateOf(NeedlePrefs.telegramAdminIds(context).sorted().joinToString(", "))
@@ -202,6 +205,39 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                 "SHA-256 ${ModelRepository.WEIGHTS_SHA256.take(24)}…",
                 style = WahariTypography.optionTag,
             )
+            ActionRow {
+                SecondaryButton(
+                    text = if (selfTesting) "Testing…" else "Run engine self-test",
+                    enabled = !selfTesting && engine.engineAvailable,
+                    onClick = {
+                        selfTesting = true
+                        selfTestResult = null
+                        scope.launch {
+                            selfTestResult = withContext(Dispatchers.IO) {
+                                EngineSelfTest.run(context)
+                            }
+                            selfTesting = false
+                            NeedleEngine.refresh(context)
+                        }
+                    },
+                )
+            }
+            selfTestResult?.let { result ->
+                Text(
+                    buildString {
+                        appendLine("Self-test: ${if (result.ok) "PASS" else "FAIL"}")
+                        appendLine("Engine v${result.engineVersion} · models=${result.models} (1=text, 2=speech)")
+                        appendLine("Prefix tokens: ${result.prefixTokens}")
+                        result.replyType?.let { appendLine("Reply type: $it") }
+                        result.rawEnvelope?.let { appendLine("Envelope: $it") }
+                        result.error?.let { appendLine("Error: $it") }
+                    }.trimEnd(),
+                    style = WahariTypography.sectionSubtitle.copy(
+                        color = if (result.ok) WahariTokens.accent else WahariTokens.danger,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    ),
+                )
+            }
         }
 
         Section(

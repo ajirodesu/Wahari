@@ -28,6 +28,9 @@ object NeedleNative {
     /** Runs one completion. Returns the raw JSON envelope, or null on failure. */
     external fun nativeComplete(input: String, maxNewTokens: Int): String?
 
+    /** NEEDLE_TEXT (1), NEEDLE_SPEECH (2) or both, for the loaded models. 0 for the stub build. */
+    external fun nativeModels(): Int
+
     /** The engine's own last error message, if any. */
     external fun nativeLastError(): String
 

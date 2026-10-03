@@ -101,6 +101,23 @@ jobs:
           curl -fL --retry 3 -o ../licenses/Apache-2.0.txt \
             "https://huggingface.co/Cactus-Compute/needle3/resolve/main/LICENSE" || true
 
+      - name: Guard against Needle header drift
+        run: |
+          set -euo pipefail
+          # The JNI bridge calls needle_complete() positionally, so a stale
+          # vendored header silently shifts every argument (this once broke all
+          # on-device inference). Fail loudly if the published header moved on.
+          curl -fL --retry 3 -o /tmp/published-needle.h \
+            "https://huggingface.co/Cactus-Compute/needle3/raw/main/android-arm64/needle.h"
+          # The vendored file keeps a 10-line Wahari attribution comment on top;
+          # the published body starts at '#ifndef NEEDLE_H'.
+          if ! awk '/^#ifndef NEEDLE_H/{found=1} found' app/src/main/cpp/needle.h |
+            diff -u - /tmp/published-needle.h; then
+            echo "::error::Vendored needle.h differs from the published header. Copy the published body verbatim (keeping the attribution comment) and update needle_jni.c to match."
+            exit 1
+          fi
+          echo "needle.h matches the published header"
+
       - name: Resolve the Needle weights checksum
         id: weights
         run: |

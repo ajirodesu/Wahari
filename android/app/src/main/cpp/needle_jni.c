@@ -41,6 +41,26 @@ static size_t g_weights_len = 0;
 static char *g_out = NULL;
 static int g_loaded = 0;
 
+/* Last engine error, copied under g_lock. needle_last_error() is only valid
+   until the next API call, so Kotlin must never read it via a second JNI call
+   made after the mutex is released: every failure path below snapshots the
+   message here first, and nativeLastError() returns the snapshot. */
+static char g_last_error[1024] = {0};
+
+static void save_engine_error(void) {
+#if NEEDLE_ENGINE_AVAILABLE
+    const char *error = needle_last_error();
+    if (error != NULL) {
+        strncpy(g_last_error, error, sizeof(g_last_error) - 1);
+        g_last_error[sizeof(g_last_error) - 1] = '\0';
+    } else {
+        g_last_error[0] = '\0';
+    }
+#else
+    g_last_error[0] = '\0';
+#endif
+}
+
 static char *out_buffer(void) {
     if (g_out == NULL) {
         g_out = (char *) malloc(NEEDLE_OUT_CAPACITY);
@@ -104,15 +124,16 @@ Java_dev_citali_needle_engine_NeedleNative_nativeLoadModel(JNIEnv *env, jclass c
                     LOGE("mmap failed for %s (%zu bytes)", c_path, size);
                 } else {
                     if (needle_load((const unsigned char *) mapped, (unsigned long long) size) < 0) {
-                        const char *error = needle_last_error();
-                        LOGE("needle_load failed: %s", error ? error : "unknown error");
+                        save_engine_error();
+                        LOGE("needle_load failed: %s", g_last_error[0] ? g_last_error : "unknown error");
                         munmap(mapped, size);
                     } else {
                         g_weights = mapped;
                         g_weights_len = size;
                         g_loaded = 1;
-                        result = 0;
+                        g_last_error[0] = '\0';
                         LOGI("weights loaded: %s (%zu bytes)", c_path, size);
+                        LOGI("needle models: %d (1=text, 2=speech)", needle_models());
                     }
                 }
             }
@@ -152,9 +173,10 @@ Java_dev_citali_needle_engine_NeedleNative_nativeInit(JNIEnv *env, jclass clazz,
                             c_tools != NULL ? c_tools : "[]",
                             NULL);
     if (prefix < 0) {
-        const char *error = needle_last_error();
-        LOGE("needle_init failed (%d): %s", prefix, error ? error : "unknown error");
+        save_engine_error();
+        LOGE("needle_init failed (%d): %s", prefix, g_last_error[0] ? g_last_error : "unknown error");
     } else {
+        g_last_error[0] = '\0';
         LOGI("needle_init ok, static prefix = %d tokens", prefix);
     }
     pthread_mutex_unlock(&g_lock);
@@ -193,14 +215,19 @@ Java_dev_citali_needle_engine_NeedleNative_nativeComplete(JNIEnv *env, jclass cl
     jstring reply = NULL;
     char *buffer = out_buffer();
     if (buffer == NULL) {
+        strncpy(g_last_error, "out of memory allocating the reply buffer", sizeof(g_last_error) - 1);
         LOGE("out of memory allocating the reply buffer");
     } else {
         buffer[0] = '\0';
-        int code = needle_complete(c_input, (int) max_new_tokens, buffer, NEEDLE_OUT_CAPACITY);
+        /* Text path: exactly one of input/pcm is non-null. Passing an integer
+           where pcm goes makes the engine see text AND audio and reject the
+           call, so the NULL here is load-bearing. */
+        int code = needle_complete(c_input, NULL, 0, (int) max_new_tokens, buffer, NEEDLE_OUT_CAPACITY);
         if (code < 0) {
-            const char *error = needle_last_error();
-            LOGE("needle_complete failed (%d): %s", code, error ? error : "unknown error");
+            save_engine_error();
+            LOGE("needle_complete failed (%d): %s", code, g_last_error[0] ? g_last_error : "unknown error");
         } else {
+            g_last_error[0] = '\0';
             reply = new_string(env, buffer);
         }
     }
@@ -217,8 +244,26 @@ Java_dev_citali_needle_engine_NeedleNative_nativeLastError(JNIEnv *env, jclass c
 #if !NEEDLE_ENGINE_AVAILABLE
     return new_string(env, "This build has no Needle engine for its ABI.");
 #else
-    const char *error = needle_last_error();
-    return new_string(env, error != NULL ? error : "");
+    /* Snapshot taken under the mutex by the failing call; safe to read here. */
+    char copy[sizeof(g_last_error)];
+    pthread_mutex_lock(&g_lock);
+    memcpy(copy, g_last_error, sizeof(copy));
+    pthread_mutex_unlock(&g_lock);
+    return new_string(env, copy);
+#endif
+}
+
+JNIEXPORT jint JNICALL
+Java_dev_citali_needle_engine_NeedleNative_nativeModels(JNIEnv *env, jclass clazz) {
+    (void) env;
+    (void) clazz;
+#if NEEDLE_ENGINE_AVAILABLE
+    pthread_mutex_lock(&g_lock);
+    int models = needle_models();
+    pthread_mutex_unlock(&g_lock);
+    return models;
+#else
+    return 0;
 #endif
 }
 

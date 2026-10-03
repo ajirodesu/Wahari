@@ -1,0 +1,36 @@
+{
+  "profiles": [
+    {
+      "package": "com.google.android.youtube",
+      "searchTerms": ["search youtube", "search"],
+      "searchResourceIds": ["search_edit_text", "search_box", "search_view"],
+      "resultResourceIds": ["title", "video_title"],
+      "excludeResultTerms": ["home", "shorts", "subscriptions", "you", "notifications", "create", "voice search", "settings", "search", "library", "history", "downloads", "your videos"],
+      "playerSignals": ["pause"]
+    },
+    {
+      "package": "com.google.android.apps.youtube.music",
+      "searchTerms": ["search", "search music"],
+      "searchResourceIds": ["search_view", "search_box"],
+      "resultResourceIds": ["title"],
+      "excludeResultTerms": ["home", "samples", "explore", "library", "settings", "search", "account", "upgrade"],
+      "playerSignals": ["pause"]
+    },
+    {
+      "package": "com.spotify.music",
+      "searchTerms": ["search"],
+      "searchResourceIds": ["search", "find_search_field"],
+      "resultResourceIds": ["title", "track_title"],
+      "excludeResultTerms": ["home", "search", "your library", "settings", "notifications", "premium", "create"],
+      "playerSignals": ["pause"]
+    },
+    {
+      "package": "*",
+      "searchTerms": ["search"],
+      "searchResourceIds": ["search"],
+      "resultResourceIds": ["title"],
+      "excludeResultTerms": ["home", "settings", "search", "notifications", "account", "library"],
+      "playerSignals": ["pause"]
+    }
+  ]
+}

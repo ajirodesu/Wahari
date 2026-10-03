@@ -19,9 +19,11 @@ object NeedlePrefs {
     private const val KEY_INTRO_COMPLETED = "intro_completed"
     private const val KEY_SETUP_STEP = "setup_step"
     private const val KEY_SETUP_COMPLETE = "setup_complete"
+    private const val KEY_PERMS_REQUESTED = "permissions_requested_once"
     private const val KEY_NEEDLE3_SOURCE = "needle3_install_source"
 
     const val SETUP_INTRO = "intro"
+    const val SETUP_PERMISSIONS = "permissions"
     const val SETUP_NEEDLE = "needle"
     const val SETUP_ACCESSIBILITY = "accessibility"
     const val SETUP_DONE = "done"
@@ -201,17 +203,37 @@ object NeedlePrefs {
 
     /** Current setup step; survives rotation, recreation and restart. */
     fun setupStep(context: Context): String =
-        prefs(context).getString(KEY_SETUP_STEP, SETUP_INTRO)
-            .takeIf { it == SETUP_NEEDLE || it == SETUP_ACCESSIBILITY || it == SETUP_DONE }
-            ?: SETUP_INTRO
+        sanitizeSetupStep(prefs(context).getString(KEY_SETUP_STEP, SETUP_INTRO))
 
     fun setSetupStep(context: Context, value: String) {
-        val safe = when (value) {
-            SETUP_NEEDLE, SETUP_ACCESSIBILITY, SETUP_DONE -> value
-            else -> SETUP_INTRO
-        }
-        prefs(context).edit().putString(KEY_SETUP_STEP, safe).apply()
+        prefs(context).edit().putString(KEY_SETUP_STEP, sanitizeSetupStep(value)).apply()
     }
+
+    /**
+     * Pure whitelist for the persisted step: unknown (or hand-edited) values
+     * fall back to the Intro instead of crashing SetupFlow's valueOf.
+     */
+    fun sanitizeSetupStep(raw: String?): String = when (raw) {
+        SETUP_PERMISSIONS, SETUP_NEEDLE, SETUP_ACCESSIBILITY, SETUP_DONE -> raw
+        else -> SETUP_INTRO
+    }
+
+    /**
+     * Permissions the system dialog has shown at least once. Combined with
+     * the rationale check this detects "Don't ask again" (see PermissionPlan).
+     * Written with commit(): a process killed on revoke must not lose it.
+     */
+    fun requestedPermissions(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_PERMS_REQUESTED, null).orEmpty()
+
+    fun markPermissionsRequested(context: Context, permissions: Collection<String>) {
+        if (permissions.isEmpty()) return
+        val merged = requestedPermissions(context) + permissions.map { it.trim() }.filter { it.isNotEmpty() }
+        prefs(context).edit().putStringSet(KEY_PERMS_REQUESTED, merged).commit()
+    }
+
+    fun permissionsEverRequested(context: Context): Boolean =
+        requestedPermissions(context).isNotEmpty()
 
     fun setupComplete(context: Context): Boolean =
         prefs(context).getBoolean(KEY_SETUP_COMPLETE, false)

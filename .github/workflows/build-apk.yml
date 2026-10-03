@@ -204,7 +204,6 @@ jobs:
           NEEDLE_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           NEEDLE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           NEEDLE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          WAHARI_EXPECTED_CERT_SHA256: ${{ secrets.EXPECTED_CERT_SHA256 }}
         run: |
           set -o pipefail
           ./gradlew --no-daemon --stacktrace :app:assembleRelease 2>&1 | tee -a /tmp/wahari-build.log

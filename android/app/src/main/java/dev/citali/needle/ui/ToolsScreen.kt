@@ -1,8 +1,6 @@
 package dev.citali.needle.ui
 
 import android.content.Context
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -21,7 +19,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.citali.needle.engine.NeedlePrefs
 import dev.citali.needle.tools.ActivityBridges
-import dev.citali.needle.tools.DevicePermissions
 import dev.citali.needle.tools.PhoneTools
 import dev.citali.needle.ui.theme.NeedleTheme
 import dev.citali.needle.ui.theme.WahariTypography
@@ -50,45 +47,20 @@ fun ToolsContent(modifier: Modifier = Modifier) {
     // enabled packs change instead of on each keystroke or output update.
     val toolLines = remember(context, packs) { PhoneTools.describe(context, packs) }
 
-    var permissions by remember(refreshTick) { mutableStateOf(DevicePermissions.missing(context)) }
+    val board = rememberPermissionBoardState()
     var sayText by remember { mutableStateOf("Hello from Wahari") }
     var shareText by remember { mutableStateOf("Sent from Wahari") }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) {
-        permissions = DevicePermissions.missing(context)
-    }
 
     PageColumn {
         Section(
             title = "Permissions",
-            subtitle = if (permissions.isEmpty()) {
+            subtitle = if (board.runtimeComplete) {
                 "Everything the enabled tools need is granted."
             } else {
-                "Missing: " + permissions.joinToString(", ") { DevicePermissions.label(it) }
+                "Grant what the tools you use need. Blocked rows open app settings."
             },
         ) {
-            ActionRow {
-                PrimaryButton(
-                    text = if (permissions.isEmpty()) "Re-check" else "Grant missing",
-                    onClick = {
-                        if (permissions.isEmpty()) {
-                            permissions = DevicePermissions.missing(context)
-                        } else {
-                            permissionLauncher.launch(permissions.toTypedArray())
-                        }
-                    },
-                )
-                SecondaryButton(text = "App settings", onClick = { DevicePermissions.openAppSettings(context) })
-            }
-            ActionRow {
-                SecondaryButton(
-                    text = if (DevicePermissions.canWriteSettings(context)) "System settings granted" else "Allow brightness control",
-                    enabled = !DevicePermissions.canWriteSettings(context),
-                    onClick = { DevicePermissions.openWriteSettings(context) },
-                )
-            }
+            PermissionBoard(state = board)
         }
 
         Section(title = "Quick actions", subtitle = "Run a tool on its own, without asking the model.") {

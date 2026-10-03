@@ -56,6 +56,7 @@ import dev.citali.needle.engine.NeedlePrefs
 import dev.citali.needle.pilot.accessibility.NeedleAccessibilityService
 import dev.citali.needle.tools.AccessibilityAutoEnable
 import dev.citali.needle.tools.DevicePermissions
+import dev.citali.needle.tools.PermissionPlan
 import dev.citali.needle.ui.theme.NeedleTheme
 import dev.citali.needle.ui.theme.WahariLayout
 import dev.citali.needle.ui.theme.WahariTokens
@@ -63,11 +64,15 @@ import dev.citali.needle.ui.theme.WahariTypography
 import dev.citali.needle.ui.theme.contentSidePadding
 import kotlinx.coroutines.launch
 
-private enum class SetupPage { Intro, Needle, Accessibility }
+internal enum class SetupPage { Intro, Permissions, Needle, Accessibility }
 
 /** First incomplete setup step, or null when everything is done. */
-private fun firstIncompleteStep(context: android.content.Context): SetupPage? =
-    if (!ModelRepository.hasWeights(context)) SetupPage.Needle
+internal fun firstIncompleteStep(
+    context: android.content.Context,
+    skipPermissions: Boolean = false,
+): SetupPage? =
+    if (!skipPermissions && PermissionPlan.needsPermissionsPage(context)) SetupPage.Permissions
+    else if (!ModelRepository.hasWeights(context)) SetupPage.Needle
     else if (!DevicePermissions.isAccessibilityServiceEnabled(context)) SetupPage.Accessibility
     else null
 
@@ -110,6 +115,7 @@ fun SetupFlow(onFinished: () -> Unit) {
             context,
             when (page) {
                 SetupPage.Intro -> NeedlePrefs.SETUP_INTRO
+                SetupPage.Permissions -> NeedlePrefs.SETUP_PERMISSIONS
                 SetupPage.Needle -> NeedlePrefs.SETUP_NEEDLE
                 SetupPage.Accessibility -> NeedlePrefs.SETUP_ACCESSIBILITY
             },
@@ -139,8 +145,9 @@ fun SetupFlow(onFinished: () -> Unit) {
 
     fun advanceFrom(page: SetupPage) {
         // Continue means the current step just resolved: move to the first
-        // step that is still incomplete, or finish when nothing is left.
-        val next = firstIncompleteStep(context)
+        // step that is still incomplete, or finish when nothing is left. The
+        // Permissions page skips itself so Continue never loops back onto it.
+        val next = firstIncompleteStep(context, skipPermissions = page == SetupPage.Permissions)
         if (next == null || next == page) {
             finish()
         } else {
@@ -150,8 +157,8 @@ fun SetupFlow(onFinished: () -> Unit) {
 
     fun skipFrom(page: SetupPage) {
         // Skip leaves the step unresolved and walks the fixed order, so a
-        // skipped Needle step still leads to Accessibility instead of finishing.
-        val order = listOf(SetupPage.Needle, SetupPage.Accessibility)
+        // skipped Permissions step still leads to Needle instead of finishing.
+        val order = listOf(SetupPage.Permissions, SetupPage.Needle, SetupPage.Accessibility)
         val remaining = order.drop(order.indexOf(page) + 1)
         if (remaining.isEmpty()) {
             finish()
@@ -235,6 +242,10 @@ fun SetupFlow(onFinished: () -> Unit) {
                             onWeightsChanged = { weightsPresent = ModelRepository.hasWeights(context) },
                             onContinue = { advanceFrom(SetupPage.Needle) },
                             onSkip = { skipFrom(SetupPage.Needle) },
+                        )
+                        SetupPage.Permissions -> PermissionsStep(
+                            onContinue = { advanceFrom(SetupPage.Permissions) },
+                            onSkip = { skipFrom(SetupPage.Permissions) },
                         )
                         SetupPage.Accessibility -> AccessibilityStep(
                             enabled = accessibilityOn,
@@ -499,6 +510,37 @@ private fun AccessibilityStep(
         ActionRow {
             PrimaryButton(text = "Continue", enabled = enabled, onClick = onContinue)
             WahariTextButton(text = "Skip", onClick = onSkip)
+        }
+    }
+}
+
+@Composable
+private fun PermissionsStep(
+    onContinue: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    val board = rememberPermissionBoardState(setupOnly = true)
+    // Continue unlocks once the user has been through the sequence or
+    // everything runtime is granted; Skip never traps the user here.
+    val canContinue = board.visited || board.runtimeComplete
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Required permissions", style = WahariTypography.pageTitle)
+        Section(
+            title = "One guided place",
+            subtitle = "Wahari's tools each need their own Android permission. " +
+                "Grant what you want to use — everything keeps working without the rest, " +
+                "and you can change your mind later in Tools.",
+        ) {}
+        PermissionBoard(state = board, setupOnly = true)
+        ActionRow {
+            PrimaryButton(text = "Continue", enabled = canContinue, onClick = onContinue)
+            WahariTextButton(text = "Skip", onClick = onSkip)
+        }
+        if (!canContinue) {
+            Text(
+                "Run \"Allow all\" once, or grant anything above, to continue. Skip leaves this step for later.",
+                style = WahariTypography.sectionSubtitle,
+            )
         }
     }
 }

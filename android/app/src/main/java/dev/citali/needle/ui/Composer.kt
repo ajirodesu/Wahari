@@ -23,7 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -31,6 +30,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -47,8 +49,16 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -63,14 +73,46 @@ import dev.citali.needle.ui.theme.WahariLayout
 import dev.citali.needle.ui.theme.WahariTokens
 import kotlin.math.roundToInt
 
+/** Hard cap for pasted/typed drafts: the model context stays predictable. */
+internal const val COMPOSER_MAX_LENGTH = 4000
+
+/** Single-line vs stacked decision and visible line count. Pure, unit-tested. */
+internal data class ComposerLayout(val stacked: Boolean, val visibleLines: Int)
+
+internal fun composerLayout(
+    hasText: Boolean,
+    hasNewline: Boolean,
+    singleWidthDp: Float,
+    inlineBudgetDp: Float,
+    wrappedLines: Int,
+    maxLines: Int,
+): ComposerLayout {
+    val stacked = hasNewline || (hasText && singleWidthDp > inlineBudgetDp)
+    val effectiveMax = maxLines.coerceIn(2, 6)
+    val visible = if (!stacked) 1 else wrappedLines.coerceIn(1, effectiveMax)
+    return ComposerLayout(stacked, visible)
+}
+
+/** Truncates over-long drafts, keeping the caret inside the text. Pure, unit-tested. */
+internal fun coerceComposerLength(value: TextFieldValue): TextFieldValue {
+    if (value.text.length <= COMPOSER_MAX_LENGTH) return value
+    val text = value.text.take(COMPOSER_MAX_LENGTH)
+    val selection = TextRange(
+        value.selection.start.coerceIn(0, text.length),
+        value.selection.end.coerceIn(0, text.length),
+    )
+    return value.copy(text = text, selection = selection, composition = null)
+}
+
 /**
  * Wahari composer capsule. One [BasicTextField] instance is shared between Mode A
  * (single line, 48dp total) and Mode B (stacked, lines x 22 + 66) via movable content,
  * so text, caret, selection, focus and the keyboard survive every mode switch.
  *
- * @param windowWidth real window width; the mode threshold always uses the final
- * active-state capsule width (window - 28dp), never the width mid-animation.
- * @param capsuleWidth current capsule width (drives the Mode B text width).
+ * @param windowWidth real window width; the mode threshold and the Mode B line
+ * count always use the final active-state capsule width (window - 28dp),
+ * never the width mid-animation.
+ * @param capsuleWidth current capsule width (layout width only).
  * @param maxLines line cap after the short-window rule (2..6).
  */
 @Composable
@@ -79,6 +121,7 @@ fun Composer(
     onFieldChange: (TextFieldValue) -> Unit,
     busy: Boolean,
     onSend: () -> Unit,
+    onStop: () -> Unit,
     onMic: () -> Unit,
     onGrid: () -> Unit,
     onEmptyPrimary: () -> Unit,
@@ -90,6 +133,7 @@ fun Composer(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val measurer = rememberTextMeasurer()
     // 15sp text on a 22dp line, derived from dp so the row math is exact at any font scale.
     val inputStyle = TextStyle(
@@ -107,29 +151,39 @@ fun Composer(
     val stackedStyle = inputStyle.copy(color = WahariTokens.textPrimary)
 
     val text = field.text
-    // Threshold measured against the final active width, not the width mid-animation.
+    // Widths measured against the final active width, never the width
+    // mid-animation: both the mode threshold and the Mode B line count use it,
+    // so neither flickers while the dock slides.
     val activeCapsuleWidth = windowWidth - WahariLayout.dockSideActive * 2
     val inlineBudget = activeCapsuleWidth - WahariLayout.capsuleBorder - WahariLayout.modeAFixedContent
     val singleWidth = measurer.measure(text.replace('\n', ' '), style = inputStyle).size.width
     val singleWidthDp = with(density) { singleWidth.toDp() }
-    val stacked = text.contains('\n') || (text.isNotEmpty() && singleWidthDp > inlineBudget)
+    val activeTextWidthPx = with(density) {
+        (activeCapsuleWidth - WahariLayout.modeBTextOverhead).toPx()
+    }.toInt().coerceAtLeast(10)
 
     val linePx = with(density) { WahariLayout.composerLine.toPx() }
-    val textWidthPx = with(density) { (capsuleWidth - WahariLayout.modeBTextOverhead).toPx() }
-        .toInt().coerceAtLeast(10)
-    val measuredLines = if (!stacked) {
+    val wrappedLines = if (!text.contains('\n') && (text.isEmpty() || singleWidthDp <= inlineBudget)) {
         1
     } else {
         val probe = if (text.endsWith('\n')) "$text " else text.ifEmpty { " " }
         val h = measurer.measure(
             probe,
             style = stackedStyle,
-            constraints = Constraints(maxWidth = textWidthPx),
+            constraints = Constraints(maxWidth = activeTextWidthPx),
         ).size.height
         maxOf(1, (h / linePx).roundToInt())
     }
-    val effectiveMaxLines = maxLines.coerceIn(2, 6)
-    val visibleLines = if (!stacked) 1 else measuredLines.coerceIn(1, effectiveMaxLines)
+    val layout = composerLayout(
+        hasText = text.isNotEmpty(),
+        hasNewline = text.contains('\n'),
+        singleWidthDp = singleWidthDp.value,
+        inlineBudgetDp = inlineBudget.value,
+        wrappedLines = wrappedLines,
+        maxLines = maxLines,
+    )
+    val stacked = layout.stacked
+    val visibleLines = layout.visibleLines
     val capsuleHeight: Dp = if (!stacked) {
         WahariLayout.capsuleHeight
     } else {
@@ -142,29 +196,40 @@ fun Composer(
     )
 
     val hasContent = text.isNotBlank()
+    // Every captured value goes through rememberUpdatedState: the movable
+    // content keeps one BasicTextField instance across Mode A <-> B (caret,
+    // selection, focus and IME state survive), while callbacks, styles and
+    // the focus requester always stay current (density, font scale, caller).
     val latestField by rememberUpdatedState(field)
     val latestSend by rememberUpdatedState(onSend)
     val latestChange by rememberUpdatedState(onFieldChange)
     val latestStacked by rememberUpdatedState(stacked)
+    val latestFocusRequester by rememberUpdatedState(focusRequester)
+    val latestFocusChanged by rememberUpdatedState(onFocusedChange)
+    val latestInputStyle by rememberUpdatedState(inputStyle)
+    val latestStackedStyle by rememberUpdatedState(stackedStyle)
     val keyHandler = Modifier.onPreviewKeyEvent { event ->
         if (event.key == Key.Enter) {
             // KeyDown only, key repeat ignored, so a held Enter cannot send twice.
             val native = event.nativeKeyEvent
             if (native.action == AndroidKeyEvent.ACTION_DOWN && native.repeatCount == 0) {
                 if (event.isShiftPressed) {
-                    // Shift+Enter inserts a newline replacing the selection (single-line
-                    // fields would otherwise swallow it, stranding the user in Mode A).
+                    // Shift+Enter inserts a newline replacing the selection.
                     val cur = latestField
                     val start = minOf(cur.selection.start, cur.selection.end).coerceIn(0, cur.text.length)
                     val end = maxOf(cur.selection.start, cur.selection.end).coerceIn(0, cur.text.length)
                     val updated = cur.text.substring(0, start) + "\n" + cur.text.substring(end)
                     latestChange(
-                        cur.copy(
-                            text = updated,
-                            selection = androidx.compose.ui.text.TextRange(start + 1),
+                        coerceComposerLength(
+                            cur.copy(
+                                text = updated,
+                                selection = androidx.compose.ui.text.TextRange(start + 1),
+                            ),
                         ),
                     )
                 } else {
+                    // Hardware Enter sends; the soft keyboard always inserts a
+                    // newline (ImeAction.Default below) and sending is the button.
                     latestSend()
                 }
                 true
@@ -175,55 +240,92 @@ fun Composer(
             false
         }
     }
+    val latestKeyHandler by rememberUpdatedState(keyHandler)
+    val latestMaxLines by rememberUpdatedState(maxLines.coerceIn(2, 6))
+    // Caret top in px, refreshed on every text layout; the follow effect
+    // below keeps it inside the viewport without animation while typing.
+    var caretTopPx by remember { mutableFloatStateOf(0f) }
 
     val textField = remember {
         movableContentOf {
             BasicTextField(
                 value = latestField,
-                onValueChange = latestChange,
+                onValueChange = { latestChange(coerceComposerLength(it)) },
                 modifier = Modifier
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { onFocusedChange(it.isFocused) }
-                    .then(keyHandler),
-                textStyle = if (latestStacked) stackedStyle else inputStyle,
+                    .testTag("composer_field")
+                    .focusRequester(latestFocusRequester)
+                    .onFocusChanged { latestFocusChanged(it.isFocused) }
+                    .semantics { contentDescription = "Ask Wahari" }
+                    .then(latestKeyHandler),
+                textStyle = if (latestStacked) latestStackedStyle else latestInputStyle,
                 cursorBrush = SolidColor(Color.White),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { latestSend() }),
-                singleLine = !latestStacked,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    autoCorrectEnabled = true,
+                    keyboardType = KeyboardType.Text,
+                    // Soft Enter inserts a newline; Send travels via the button
+                    // (or hardware Enter). Never toggled, so the IME connection
+                    // survives every Mode A <-> B switch.
+                    imeAction = ImeAction.Default,
+                ),
+                // Always multi-line: a soft Enter in Mode A flips to Mode B in
+                // the same frame instead of being swallowed.
+                singleLine = false,
+                maxLines = latestMaxLines,
                 decorationBox = { inner ->
                     Box {
                         if (latestField.text.isEmpty()) {
                             Text(
                                 "Ask Wahari",
-                                style = (if (latestStacked) stackedStyle else inputStyle)
+                                style = (if (latestStacked) latestStackedStyle else latestInputStyle)
                                     .copy(color = WahariTokens.textPlaceholder),
                             )
                         }
                         inner()
                     }
                 },
+                onTextLayout = { layoutResult ->
+                    val cursor = latestField.selection.start.coerceIn(0, latestField.text.length)
+                    caretTopPx = layoutResult.getCursorRect(cursor).top
+                },
             )
         }
     }
 
     val modeBScrollState = rememberScrollState()
-    LaunchedEffect(text, measuredLines) {
-        if (stacked && measuredLines > visibleLines) {
-            modeBScrollState.animateScrollTo(modeBScrollState.maxValue)
+    // Keep the caret visible while typing: instant scroll, no animation, and
+    // only when the caret actually left the viewport (editing an earlier line
+    // never yanks the view to the bottom).
+    LaunchedEffect(caretTopPx, visibleLines) {
+        if (!stacked) return@LaunchedEffect
+        val viewportH = visibleLines * linePx
+        val viewTop = modeBScrollState.value.toFloat()
+        when {
+            caretTopPx < viewTop -> modeBScrollState.scrollTo(caretTopPx.toInt().coerceAtLeast(0))
+            caretTopPx + linePx > viewTop + viewportH ->
+                modeBScrollState.scrollTo((caretTopPx + linePx - viewportH).toInt().coerceAtLeast(0))
         }
     }
 
     Box(
         modifier = modifier
+            .testTag("composer")
             .width(capsuleWidth)
             .height(animatedH)
-            .clip(WahariTokens.capsuleShape)
-            .background(WahariTokens.bgCapsule)
+            // No .clip: the background keeps the rounded shape, but clipping
+            // the content would cut off text selection handles. The border
+            // below still draws rounded.
+            .background(WahariTokens.bgCapsule, WahariTokens.capsuleShape)
             .border(1.dp, WahariTokens.borderCapsule, WahariTokens.capsuleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = { focusRequester.requestFocus() },
+                onClick = {
+                    focusRequester.requestFocus()
+                    // Focused but IME dismissed via Back: requesting focus
+                    // alone reopens nothing, so ask the keyboard explicitly.
+                    keyboard?.show()
+                },
             ),
     ) {
         if (!stacked) {
@@ -234,9 +336,9 @@ fun Composer(
                     .padding(start = 4.dp, end = WahariLayout.modeARightPad),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Grid hit area: 10 + 24 + 10 = 44 wide; icon visually at 10 + 24 box.
-                CapsuleHitButton(width = 44.dp, onClick = onGrid, label = "Agent Mode") {
-                    Icon(WahariIcons.layoutGrid, contentDescription = null, tint = Color.White, modifier = Modifier.size(WahariLayout.capsuleIcon))
+                // Grid hit area: 48 wide, icon visually where the 44dp box put it.
+                CapsuleHitButton(width = 48.dp, onClick = onGrid, label = "Agent Mode", iconOffsetStart = 10.dp, testTag = "composer_grid") {
+                    Icon(WahariIcons.layoutGrid, contentDescription = "Agent Mode", tint = Color.White, modifier = Modifier.size(WahariLayout.capsuleIcon))
                 }
                 Box(
                     modifier = Modifier
@@ -246,14 +348,29 @@ fun Composer(
                 ) {
                     textField()
                 }
-                // Mic hit area: 4 + 24 + 8 = 36 wide.
-                CapsuleHitButton(width = 36.dp, onClick = onMic, label = "Voice input", iconOffsetStart = 4.dp) {
-                    Icon(WahariIcons.mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(WahariLayout.capsuleIcon))
+                // Mic hit area: 48 wide, icon visually where the 36dp box put it.
+                CapsuleHitButton(width = 48.dp, onClick = onMic, label = "Voice input", iconOffsetStart = 0.dp, testTag = "composer_mic") {
+                    Icon(WahariIcons.mic, contentDescription = "Voice input", tint = Color.White, modifier = Modifier.size(WahariLayout.capsuleIcon))
                 }
                 PrimaryCircleButton(
-                    hasContent = hasContent,
-                    busy = busy,
-                    onClick = { if (hasContent) latestSend() else onEmptyPrimary() },
+                    mode = when {
+                        busy -> CircleMode.Stop
+                        hasContent -> CircleMode.Send
+                        else -> CircleMode.Voice
+                    },
+                    onClick = {
+                        when {
+                            busy -> onStop()
+                            hasContent -> latestSend()
+                            else -> onEmptyPrimary()
+                        }
+                    },
+                    onClickLabel = when {
+                        busy -> "Stop"
+                        hasContent -> "Send"
+                        else -> "Voice mode"
+                    },
+                    testTag = "composer_primary",
                 )
             }
         } else {
@@ -282,19 +399,27 @@ fun Composer(
                         .height(WahariLayout.toolbarHeight),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    CapsuleHitButton(width = 24.dp, height = WahariLayout.toolbarHeight, onClick = onGrid, label = "Agent Mode") {
-                        Icon(WahariIcons.layoutGrid, contentDescription = null, tint = Color.White, modifier = Modifier.size(WahariLayout.capsuleIcon))
+                    CapsuleHitButton(width = 48.dp, height = WahariLayout.toolbarHeight, onClick = onGrid, label = "Agent Mode", iconOffsetStart = 0.dp, testTag = "composer_grid") {
+                        Icon(WahariIcons.layoutGrid, contentDescription = "Agent Mode", tint = Color.White, modifier = Modifier.size(WahariLayout.capsuleIcon))
                     }
                     Spacer(Modifier.weight(1f))
-                    CapsuleHitButton(width = 30.dp, height = WahariLayout.toolbarHeight, onClick = onMic, label = "Voice input") {
-                        Icon(WahariIcons.mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(WahariLayout.capsuleIcon))
+                    CapsuleHitButton(width = 48.dp, height = WahariLayout.toolbarHeight, onClick = onMic, label = "Voice input", iconOffsetStart = 3.dp, testTag = "composer_mic") {
+                        Icon(WahariIcons.mic, contentDescription = "Voice input", tint = Color.White, modifier = Modifier.size(WahariLayout.capsuleIcon))
                     }
                     Spacer(Modifier.width(8.dp))
-                    // Always the arrow in Mode B; a tap with blank text does nothing.
+                    // Arrow normally; stop glyph while generating (tap cancels),
+                    // and a blank-text tap does nothing.
                     PrimaryCircleButton(
-                        hasContent = true,
-                        busy = busy,
-                        onClick = { if (text.isNotBlank()) latestSend() },
+                        mode = if (busy) CircleMode.Stop else CircleMode.Send,
+                        hitHeight = WahariLayout.toolbarHeight,
+                        onClick = {
+                            if (busy) {
+                                onStop()
+                            } else if (text.isNotBlank()) {
+                                latestSend()
+                            }
+                        },
+                        onClickLabel = if (busy) "Stop" else "Send",
                     )
                 }
             }
@@ -313,6 +438,7 @@ private fun CapsuleHitButton(
     label: String,
     height: Dp = WahariLayout.capsuleHeight,
     iconOffsetStart: Dp? = null,
+    testTag: String? = null,
     content: @Composable () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -325,10 +451,12 @@ private fun CapsuleHitButton(
     Box(
         modifier = Modifier
             .size(width = width, height = height)
+            .then(if (testTag == null) Modifier else Modifier.testTag(testTag))
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(
                 interactionSource = interaction,
                 indication = null,
+                role = Role.Button,
                 onClickLabel = label,
                 onClick = onClick,
             ),
@@ -347,9 +475,11 @@ private fun CapsuleHitButton(
 
 @Composable
 fun PrimaryCircleButton(
-    hasContent: Boolean,
-    busy: Boolean,
+    mode: CircleMode,
     onClick: () -> Unit,
+    onClickLabel: String,
+    hitHeight: Dp = WahariLayout.capsuleHeight,
+    testTag: String = "composer_primary",
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -358,46 +488,76 @@ fun PrimaryCircleButton(
         animationSpec = tween(WahariTokens.PRESS_MS, easing = WahariTokens.pressEasing),
         label = "send",
     ).value
-    val shown by animateFloatAsState(
-        if (hasContent) 1f else 0f,
+    // Voice <-> send crossfade, with the stop glyph layered over both while busy.
+    val shown: Float by animateFloatAsState(
+        if (mode == CircleMode.Send) 1f else 0f,
         animationSpec = tween(WahariTokens.GLYPH_FADE_MS, easing = WahariTokens.pressEasing),
         label = "glyph",
     )
+    val stopping: Float by animateFloatAsState(
+        if (mode == CircleMode.Stop) 1f else 0f,
+        animationSpec = tween(WahariTokens.GLYPH_FADE_MS, easing = WahariTokens.pressEasing),
+        label = "stop",
+    )
+    // Hit area meets the 48dp minimum; the 36dp circle stays glued to the
+    // trailing edge so the visual does not move.
     Box(
         modifier = Modifier
-            .size(WahariLayout.sendCircle)
+            .size(width = 48.dp, height = hitHeight)
+            .testTag(testTag)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(androidx.compose.foundation.shape.CircleShape)
-            .background(if (pressed) WahariTokens.accentPressed else WahariTokens.accent)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = onClickLabel,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.CenterEnd,
     ) {
-        // Glyphs share the clipped 32dp circle; the inactive one never shows mid-state
-        // beyond the crossfade and never intercepts touches (no clickables inside).
         Box(
-            modifier = Modifier.graphicsLayer {
-                alpha = 1f - shown
-                val s = 1f - 0.4f * shown
-                scaleX = s
-                scaleY = s
-                translationY = -4.dp.toPx() * shown
-            },
+            modifier = Modifier
+                .size(WahariLayout.sendCircle)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(if (pressed) WahariTokens.accentPressed else WahariTokens.accent),
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(WahariIcons.audioLines, contentDescription = null, tint = Color.White, modifier = Modifier.size(WahariLayout.sendGlyph))
-        }
-        Box(
-            modifier = Modifier.graphicsLayer {
-                alpha = shown
-                val s = 0.6f + 0.4f * shown
-                scaleX = s
-                scaleY = s
-                translationY = 4.dp.toPx() * (1f - shown)
-            },
-        ) {
-            Icon(WahariIcons.arrowUp, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(WahariLayout.sendGlyph))
+            // Glyphs share the clipped circle; inactive ones never show mid-state
+            // beyond the crossfade and never intercept touches (no clickables inside).
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    alpha = (1f - shown) * (1f - stopping)
+                    val s = 1f - 0.4f * shown
+                    scaleX = s
+                    scaleY = s
+                    translationY = -4.dp.toPx() * shown
+                },
+            ) {
+                Icon(WahariIcons.audioLines, contentDescription = "Voice mode", tint = Color.White, modifier = Modifier.size(WahariLayout.sendGlyph))
+            }
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    alpha = shown * (1f - stopping)
+                    val s = 0.6f + 0.4f * shown
+                    scaleX = s
+                    scaleY = s
+                    translationY = 4.dp.toPx() * (1f - shown)
+                },
+            ) {
+                Icon(WahariIcons.arrowUp, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(WahariLayout.sendGlyph))
+            }
+            Box(
+                modifier = Modifier.graphicsLayer { alpha = stopping },
+            ) {
+                Icon(WahariIcons.square, contentDescription = "Stop", tint = Color.White, modifier = Modifier.size(WahariLayout.sendGlyph))
+            }
         }
     }
 }
+
+/** Primary circle states: dictate entry, send, or cancel the in-flight turn. */
+enum class CircleMode { Voice, Send, Stop }
+
 
 @androidx.compose.ui.tooling.preview.Preview(name = "Capsule Mode A", widthDp = 412, heightDp = 200)
 @Composable
@@ -415,6 +575,7 @@ private fun PreviewCapsuleA() {
                 onFieldChange = {},
                 busy = false,
                 onSend = {},
+                onStop = {},
                 onMic = {},
                 onGrid = {},
                 onEmptyPrimary = {},
@@ -444,6 +605,7 @@ private fun PreviewCapsuleAActive() {
                 onFieldChange = {},
                 busy = false,
                 onSend = {},
+                onStop = {},
                 onMic = {},
                 onGrid = {},
                 onEmptyPrimary = {},
@@ -473,6 +635,7 @@ private fun PreviewCapsuleB3() {
                 onFieldChange = {},
                 busy = false,
                 onSend = {},
+                onStop = {},
                 onMic = {},
                 onGrid = {},
                 onEmptyPrimary = {},
@@ -502,6 +665,7 @@ private fun PreviewCapsuleB6() {
                 onFieldChange = {},
                 busy = false,
                 onSend = {},
+                onStop = {},
                 onMic = {},
                 onGrid = {},
                 onEmptyPrimary = {},

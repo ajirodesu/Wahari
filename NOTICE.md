@@ -50,10 +50,3 @@ The full MIT text is in `licenses/MIT-TaskPilot.txt`.
 
 Jetpack Compose, AndroidX, Material 3, Kotlin and the Gradle wrapper are used
 under their respective Apache-2.0 / MIT licences.
-
-## Developer certificate
-
-Wahari's developer identity (AjiroDesu) is certified in
-[`DEVELOPER_CERTIFICATE.md`](DEVELOPER_CERTIFICATE.md) and verifiable at
-runtime via `dev.citali.needle.engine.DeveloperCertificate`
-(Settings → Developer certificate) and `GET /api/certificate`.

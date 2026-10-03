@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -89,6 +90,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.citali.needle.engine.ChatController
 import dev.citali.needle.engine.NeedleEngine
 import dev.citali.needle.engine.NeedlePrefs
+import dev.citali.needle.engine.VoiceMode
 import dev.citali.needle.pilot.agent.AgentEngine
 import dev.citali.needle.pilot.agent.AppSpec
 import dev.citali.needle.pilot.agent.CommandPlanner
@@ -143,6 +145,13 @@ fun ChatScreen(
     val messages by ChatController.messages.collectAsStateWithLifecycle()
     val busy by ChatController.busy.collectAsStateWithLifecycle()
     val agentState by AgentEngine.state.collectAsStateWithLifecycle()
+    // Command heard while the model is busy: sent when it goes idle.
+    var pendingVoice by remember { mutableStateOf<String?>(null) }
+    // Messages already handled by the voice loop, so replies speak once.
+    var spokenUpTo by remember { mutableStateOf(0) }
+    // Set when the permission dialog grants access; the starter effect below
+    // picks it up (the launcher callback cannot call the starter directly).
+    var voiceStartRequested by remember { mutableStateOf(false) }
     // Approve stays enabled while the OS setting is on even if the service is
     // still binding (cold start, swipe-away): AgentEngine waits for the bind.
     // Cached and refreshed on resume so typing does not hit Settings.Secure.
@@ -178,30 +187,71 @@ fun ChatScreen(
         if (newChatSignal > 0) {
             ChatController.clear()
             automateEntries.clear()
+            pendingVoice = null
+            spokenUpTo = 0
             onPopupIndex(null)
             focusManager.clearFocus(force = true)
         }
     }
 
+    // Double-tap guard: a second tap while the recognizer is already up is
+    // ignored instead of stacking activities.
+    var micLaunching by remember { mutableStateOf(false) }
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        micLaunching = false
         if (result.resultCode == Activity.RESULT_OK) {
             val spoken = result.data
                 ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                ?.firstOrNull()
-            if (!spoken.isNullOrBlank()) {
-                field = TextFieldValue(spoken)
+                ?.firstOrNull { it.isNotBlank() }
+            if (spoken.isNullOrBlank()) {
+                onToast("No speech was recognised.")
+            } else {
+                // Dictate at the caret: replace the selection instead of wiping the field.
+                val cur = field
+                val start = minOf(cur.selection.start, cur.selection.end).coerceIn(0, cur.text.length)
+                val end = maxOf(cur.selection.start, cur.selection.end).coerceIn(0, cur.text.length)
+                val insert = if (start > 0 && !cur.text[start - 1].isWhitespace()) " $spoken" else spoken
+                field = cur.copy(
+                    text = cur.text.substring(0, start) + insert + cur.text.substring(end),
+                    selection = androidx.compose.ui.text.TextRange(start + insert.length),
+                )
             }
-        } else {
-            ChatController.addSystem("No speech was recognised.", error = true)
         }
+        // RESULT_CANCELED (back button / dismissed) is silence, not an error.
     }
+    // Double-tap guard: a second tap while the recognizer is already up is
+    // ignored instead of stacking activities.
     fun launchMic() {
+        if (micLaunching) return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your command")
         }
+        micLaunching = true
         runCatching { micLauncher.launch(intent) }
-            .onFailure { ChatController.addSystem("No speech recogniser is available on this device.", error = true) }
+            .onFailure {
+                micLaunching = false
+                onToast("No speech recogniser is available on this device.")
+            }
+    }
+
+    // ---- Voice mode (hands-free loop) --------------------------------------
+    val voice by VoiceMode.state.collectAsStateWithLifecycle()
+
+    // Leaving the screen ends the session: no background listening.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && VoiceMode.state.value.active) {
+                VoiceMode.stop()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (VoiceMode.state.value.active) VoiceMode.stop()
+        }
     }
 
     fun itemCount(): Int {
@@ -281,6 +331,69 @@ fun ChatScreen(
         }
     }
 
+    // Voice-mode callbacks must sit after doSend: local functions cannot be
+    // referenced before their declaration.
+    val voicePermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                voiceStartRequested = true
+            } else if ((context as? android.app.Activity)
+                    ?.shouldShowRequestPermissionRationale(android.Manifest.permission.RECORD_AUDIO) == true
+            ) {
+                onToast("Microphone permission is needed for voice mode.")
+            } else {
+                // Permanently denied (or policy-blocked): point at settings.
+                onToast("Microphone blocked — allow it in App info to use voice mode.")
+                DevicePermissions.openAppSettings(context)
+            }
+        }
+
+    fun onVoiceCommand(heard: String) {
+        field = TextFieldValue(heard)
+        if (busy) {
+            pendingVoice = heard
+            onToast("Heard you — sending when ready")
+        } else {
+            doSend(heard)
+        }
+    }
+
+    fun startVoiceSession() {
+        when (VoiceMode.start(context, onCommand = ::onVoiceCommand, onStatus = onToast)) {
+            VoiceMode.StartResult.STARTED -> {
+                pendingVoice = null
+                spokenUpTo = messages.size
+                onToast("Voice mode on — speak your command")
+            }
+            VoiceMode.StartResult.NEED_PERMISSION ->
+                voicePermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            VoiceMode.StartResult.NO_RECOGNIZER ->
+                onToast("No speech recogniser is available on this device.")
+            VoiceMode.StartResult.ALREADY_ON -> Unit
+        }
+    }
+
+    // Flush a command that arrived while busy; speak fresh assistant replies.
+    LaunchedEffect(voiceStartRequested) {
+        if (voiceStartRequested) {
+            voiceStartRequested = false
+            startVoiceSession()
+        }
+    }
+    LaunchedEffect(busy, messages.size) {
+        pendingVoice?.let { pending ->
+            if (!busy) {
+                pendingVoice = null
+                doSend(pending)
+            }
+        }
+        if (voice.active && !busy && messages.size > spokenUpTo) {
+            val fresh = messages.drop(spokenUpTo).lastOrNull { it.role == ChatController.Role.ASSISTANT }
+            spokenUpTo = messages.size
+            fresh?.let { VoiceMode.speak(context, it.text) }
+        }
+    }
+
     // Open the popup only after scrolling the bubble (plus its popup) fully into
     // the clear band below the top nav and above the dock. No flipping below.
     val listTopClearPx by rememberUpdatedState(
@@ -320,6 +433,7 @@ fun ChatScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier
+                    .testTag("chat_list")
                     .widthIn(max = WahariLayout.contentMax)
                     .fillMaxWidth(),
                 contentPadding = PaddingValues(
@@ -500,14 +614,22 @@ fun ChatScreen(
             ) {
                 Composer(
                     field = field,
-                    onFieldChange = { field = it },
+                    onFieldChange = { field = coerceComposerLength(it) },
                     busy = busy,
                     onSend = { doSend(field.text) },
+                    onStop = { ChatController.stop() },
                     onMic = { launchMic() },
                     onGrid = onOpenSheet,
                     onEmptyPrimary = {
-                        onToast("Voice mode active")
-                        launchMic()
+                        if (VoiceMode.state.value.active) {
+                            VoiceMode.stop()
+                            pendingVoice = null
+                            onToast("Voice mode off")
+                        } else if (!VoiceMode.hasPermission(context)) {
+                            voicePermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                        } else {
+                            startVoiceSession()
+                        }
                     },
                     focusRequester = focusRequester,
                     onFocusedChange = { composerFocused = it },

@@ -1,0 +1,21 @@
+{
+  "aliases": {
+    "yt": "youtube",
+    "youtube": "youtube",
+    "ytm": "youtube music",
+    "yt music": "youtube music",
+    "youtubemusic": "youtube music",
+    "youtube music": "youtube music",
+    "spot": "spotify",
+    "spotify": "spotify",
+    "vlc": "vlc",
+    "mx player": "mx player",
+    "netflix": "netflix",
+    "prime video": "prime video",
+    "disney plus": "disney plus",
+    "apple music": "apple music",
+    "soundcloud": "soundcloud",
+    "audible": "audible",
+    "poweramp": "poweramp"
+  }
+}

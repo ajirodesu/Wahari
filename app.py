@@ -1691,29 +1691,6 @@ def health_api():
         "termux": IS_TERMUX,
     }), (200 if ready else 503)
 
-# ----------------------------------------------------------------------
-# Developer certificate (mirrors DEVELOPER_CERTIFICATE.md and the Android
-# DeveloperCertificate verifier). Lets any client confirm authorship and,
-# when WAHARI_EXPECTED_CERT_SHA256 is set, the pinned signing fingerprint.
-# ----------------------------------------------------------------------
-DEVELOPER_CERTIFICATE = {
-    "app": "Wahari",
-    "package": "com.ajirodesu.wahari",
-    "developer": "AjiroDesu",
-    "engine": "Needle 3 by Cactus Compute (Apache-2.0)",
-    "automation_core": "TaskPilot by TherealCitali (MIT)",
-}
-
-@app.route("/api/certificate", methods=["GET"])
-def certificate_api():
-    expected = os.environ.get("WAHARI_EXPECTED_CERT_SHA256", "")
-    return jsonify({
-        **DEVELOPER_CERTIFICATE,
-        "pinned_sha256": expected or None,
-        "pinned": bool(expected),
-        "verification": "pinned" if expected else "unpinned",
-    })
-
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
     try:

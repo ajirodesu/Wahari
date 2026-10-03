@@ -1,8 +1,10 @@
 package dev.citali.needle.engine
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,13 +43,16 @@ object ChatController {
 
     private val history = ArrayDeque<Pair<String, String>>()
 
+    private var job: Job? = null
+
     fun send(context: Context, raw: String) {
         val query = raw.trim()
         if (query.isEmpty() || _busy.value) return
         val app = context.applicationContext
         _messages.value = _messages.value + Message(Role.USER, query)
         _busy.value = true
-        scope.launch {
+        job?.cancel()
+        job = scope.launch {
             try {
                 val preparation = NeedleSessions.preparePhone(app)
                 preparation.message?.let { note ->
@@ -99,6 +104,19 @@ object ChatController {
 
     fun addSystem(text: String, error: Boolean = false) {
         _messages.value = _messages.value + Message(Role.SYSTEM, text, error = error)
+    }
+
+    /**
+     * Cancels the in-flight generation, if any. The running turn stops between
+     * steps (a blocking native call finishes first); [busy] resets in the
+     * send coroutine's finally block either way. Returns false when idle.
+     */
+    fun stop(): Boolean {
+        val active = job?.takeIf { it.isActive } ?: return false
+        active.cancel(CancellationException("Stopped by user."))
+        job = null
+        _messages.value = _messages.value + Message(Role.SYSTEM, "Stopped.")
+        return true
     }
 
     fun clear() {

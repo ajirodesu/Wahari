@@ -46,12 +46,6 @@ val needleWeightsSize: Long = env("NEEDLE_WEIGHTS_SIZE")?.toLongOrNull() ?: 35_3
 val needleVersionCode: Int = env("NEEDLE_VERSION_CODE")?.toIntOrNull() ?: 1
 val needleVersionName: String = env("NEEDLE_VERSION_NAME") ?: "0.0.1"
 
-// SHA-256 fingerprint the installed APK must present for the in-app
-// developer certificate to report VERIFIED. Empty = unpinned project-key
-// build (the default for sideloading); set WAHARI_EXPECTED_CERT_SHA256 for a
-// private release key. Also honoured by the legacy Python /api/certificate.
-val wahariExpectedCertSha256: String = env("WAHARI_EXPECTED_CERT_SHA256") ?: ""
-
 android {
     namespace = "dev.citali.needle"
     compileSdk = 35
@@ -66,6 +60,7 @@ android {
         targetSdk = 35
         versionCode = needleVersionCode
         versionName = needleVersionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // One universal APK for every major ABI, so the app installs on any
         // phone, tablet, Chromebook or emulator:
@@ -99,7 +94,6 @@ android {
         buildConfigField("String", "NEEDLE_WEIGHTS_URL", "\"$needleWeightsUrl\"")
         buildConfigField("String", "NEEDLE_WEIGHTS_SHA256", "\"$needleWeightsSha256\"")
         buildConfigField("long", "NEEDLE_WEIGHTS_SIZE", "${needleWeightsSize}L")
-        buildConfigField("String", "WAHARI_EXPECTED_CERT_SHA256", "\"$wahariExpectedCertSha256\"")
     }
 
     externalNativeBuild {
@@ -190,6 +184,12 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

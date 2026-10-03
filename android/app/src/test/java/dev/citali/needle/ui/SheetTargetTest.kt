@@ -63,4 +63,18 @@ class SheetTargetTest {
         assertEquals(SheetValue.Partial, target(current = 100f, allowExpand = false))
         assertEquals(SheetValue.Closed, target(current = 900f, allowExpand = false))
     }
+
+    @Test
+    fun thresholdIsExclusive() {
+        // Exactly at fling speed the nearest anchor decides, not the fling.
+        assertEquals(SheetValue.Expanded, target(current = 100f, velocityDp = -1000f))
+        assertEquals(SheetValue.Closed, target(current = 900f, velocityDp = 1000f))
+    }
+
+    @Test
+    fun restingExactlyOnAnAnchorStays() {
+        assertEquals(SheetValue.Expanded, target(current = 0f))
+        assertEquals(SheetValue.Partial, target(current = 500f))
+        assertEquals(SheetValue.Closed, target(current = 1000f))
+    }
 }

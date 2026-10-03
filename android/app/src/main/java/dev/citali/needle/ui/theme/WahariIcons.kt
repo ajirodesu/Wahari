@@ -138,4 +138,61 @@ object WahariIcons {
     val arrowLeft: ImageVector by lazy { icon("m12 19-7-7 7-7", "M19 12H5") }
     val x: ImageVector by lazy { icon("M18 6L6 18", "m6 6 12 12") }
     val square: ImageVector by lazy { icon(rect(5f, 5f, 14f, 14f, 2f)) }
+    val bell: ImageVector by lazy {
+        icon(
+            "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9",
+            "M10.3 21a1.94 1.94 0 0 0 3.4 0",
+        )
+    }
+    val phone: ImageVector by lazy {
+        icon("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z")
+    }
+    val history: ImageVector by lazy {
+        icon(
+            "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",
+            "M3 3v5h5",
+            "M12 7v5l4 2",
+        )
+    }
+    val users: ImageVector by lazy {
+        icon(
+            "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
+            circle(9f, 7f, 4f),
+            "M22 21v-2a4 4 0 0 0-3-3.87",
+            "M16 3.13a4 4 0 0 1 0 7.75",
+        )
+    }
+    val camera: ImageVector by lazy {
+        icon(
+            "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z",
+            circle(12f, 13f, 3f),
+        )
+    }
+    val mapPin: ImageVector by lazy {
+        icon(
+            "M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z",
+            circle(12f, 10f, 3f),
+        )
+    }
+    val sun: ImageVector by lazy {
+        icon(
+            circle(12f, 12f, 4f),
+            "M12 2v2",
+            "M12 20v2",
+            "m4.93 4.93 1.41 1.41",
+            "m17.66 17.66 1.41 1.41",
+            "M2 12h2",
+            "M20 12h2",
+            "m6.34 17.66-1.41 1.41",
+            "m19.07 4.93-1.41 1.41",
+        )
+    }
+    val batteryCharging: ImageVector by lazy {
+        icon(
+            rect(2f, 7f, 16f, 10f, 2f),
+            "M22 11v2",
+            "m11 7-3 5h4l-3 5",
+        )
+    }
+    val smartphone: ImageVector by lazy { icon(rect(7f, 2f, 14f, 20f, 2f), "M12 18h.01") }
 }

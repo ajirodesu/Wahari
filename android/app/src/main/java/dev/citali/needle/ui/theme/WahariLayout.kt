@@ -50,8 +50,8 @@ object WahariLayout {
     val modeBLeftPad = 8.dp
     val modeBToolbarGap = 8.dp
     val toolbarHeight = 36.dp
-    /** Fixed row content in Mode A: 4 pad + 44 grid + 36 mic + 36 send + 6 pad = 126dp. */
-    val modeAFixedContent = 126.dp
+    /** Fixed row content in Mode A: 4 pad + 48 grid + 48 mic + 48 send + 6 pad = 154dp. */
+    val modeAFixedContent = 154.dp
     /** Capsule border eats 2dp of the width. */
     val capsuleBorder = 2.dp
     /** Text width in Mode B: capsule width minus left/right padding and border. */

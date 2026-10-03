@@ -136,20 +136,6 @@ for a smaller phone-only APK); and `NEEDLE_ALLOW_STUB=ON`, which lets an `arm64-
 succeed without the engine when the download fails — the app then says so instead of
 pretending to think.
 
-**Developer certificate.** The app proves its own identity at runtime: Settings → Developer
-certificate shows the developer (AjiroDesu), package name, version and the SHA-256 fingerprint
-of the APK signing certificate, with a tap-to-copy button. Compare it with
-`apksigner verify --print-certs` or the release `SHA256SUMS`. Details:
-[`DEVELOPER_CERTIFICATE.md`](DEVELOPER_CERTIFICATE.md). To make the in-app badge report
-`VERIFIED` instead of `UNPINNED`, bake in the expected fingerprint:
-
-| Secret / env var | Meaning |
-| --- | --- |
-| `EXPECTED_CERT_SHA256` (secret) / `WAHARI_EXPECTED_CERT_SHA256` (env) | colon-separated SHA-256 of the release signing certificate |
-
-A build whose runtime certificate differs from the pinned value reports `MISMATCH` — treat it
-as untrusted.
-
 **Make accessibility permanent.** Android never lets an app flip its own accessibility switch,
 so Wahari can only restore it itself with the signature-level `WRITE_SECURE_SETTINGS` permission,
 granted once from a computer (or via Shizuku / root):
@@ -184,8 +170,7 @@ Each run of the workflow (`.github/workflows/build-apk.yml`) does this, in order
 6. uploads `Wahari-0.0.<run>-<sha>.apk` as an artifact, publishes the `wahari-build-<run>`
    pre-release (newest 10 kept) and, on `main`, refreshes `wahari-latest`;
 7. runs the JVM unit tests — the tool-schema shape the engine's grammar compiles, the safety
-   policy that guards screen automation, the developer-certificate fingerprint helpers and the
-   device-compatibility contract. They run last on purpose: a failing test turns the build
+   policy that guards screen automation and the device-compatibility contract. They run last on purpose: a failing test turns the build
    red, but it can never be the reason a release is missing its APK;
 8. a second job boots an x86_64 emulator, installs the APK it just built, launches it and fails the
    run if the app dies, lands in the crash buffer, or is not the resumed activity. It also uploads
@@ -200,7 +185,7 @@ Every build also records what it resolved (weights hash, APK hash) on the `ci-lo
 cd android
 ./gradlew :app:assembleRelease          # signed → app/build/outputs/apk/release/
 ./gradlew :app:assembleDebug            # installable side-by-side build (.debug suffix)
-./gradlew :app:testReleaseUnitTest      # JVM tests (schemas, safety, certificate, compatibility)
+./gradlew :app:testReleaseUnitTest      # JVM tests (schemas, safety, compatibility)
 ```
 
 CMake downloads `libneedle.a` (SHA-256 verified) on the first build and caches it in

@@ -1,6 +1,8 @@
 package dev.citali.needle.ui
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
@@ -47,6 +49,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.dismiss
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -54,8 +61,10 @@ import dev.citali.needle.ui.theme.WahariLayout
 import dev.citali.needle.ui.theme.WahariTokens
 import kotlin.math.abs
 import kotlin.math.sign
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 
 /** Sheet anchors: hidden, default height, near-full height. */
 enum class SheetValue { Closed, Partial, Expanded }
@@ -98,12 +107,6 @@ internal fun resolveSheetTarget(
         ?: SheetValue.Partial
 }
 
-/** Finger-tracking state kept outside snapshots: written per touch delta, never recomposed. */
-private class SheetDragTracker {
-    var active = false
-    var anchor = 0f
-}
-
 /**
  * Claude-style bottom sheet shared by every modal in the app.
  *
@@ -111,7 +114,7 @@ private class SheetDragTracker {
  *   keyed on pixel sizes only so programmatic changes animate instead of
  *   jumping. Releases settle with a spring that starts from the release
  *   velocity; anchor choice lives in [resolveSheetTarget] and is unit-tested.
- * - Drags accumulate 1:1 in a [SheetDragTracker] synchronously per delta, so
+ * - Drags write it synchronously per delta (no coroutine hop, no stale reads);
  *   queued frames can never compute from a stale offset and lose movement.
  * - Nested scroll contract: swipe up below EXPANDED grows the sheet before the
  *   content scrolls; swipe down scrolls content first and only drags the sheet
@@ -150,48 +153,71 @@ fun DraggableBottomSheet(
     // `value` change used to jump straight to the target anchor instead of
     // animating. Programmatic changes animate via LaunchedEffect below.
     val offset = remember(partialPx, expandedPx) { Animatable(anchorPx(value)) }
-    val drag = remember { SheetDragTracker() }
+    // Finger position, written synchronously per delta (draw-scope reads only,
+    // so no recomposition storm). The Animatable is for settling only.
+    var dragOffset by remember { mutableFloatStateOf(0f) }
     var settling by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
+    // Anchor the in-flight settle is heading for: LaunchedEffect skips while
+    // it matches `value`, so the release spring and the state follower never
+    // run two animations at once. Null when no settle owns the motion.
+    var settlingTarget by remember { mutableStateOf<SheetValue?>(null) }
     var dismissPx by remember { mutableFloatStateOf(0f) }
     var sheetWidthPx by remember { mutableFloatStateOf(0f) }
     val scroll = rememberScrollState()
     val rubberPx = with(density) { 48.dp.toPx() }
+    // True while the sheet (not just the content) consumed motion in the
+    // current gesture: gates onPostFling so a pure content fling that merely
+    // hits its bound can never teleport the sheet to another anchor.
+    var sheetConsumed by remember { mutableStateOf(false) }
 
     fun pxPerDp(): Float = with(density) { 1.dp.toPx() }
 
+    /** Live position: the finger while dragging, the spring otherwise. */
+    fun currentOffset(): Float = if (dragging) dragOffset else offset.value
+
     /** Ends finger tracking. Idempotent; safe to call from every release path. */
     fun endDrag() {
-        drag.active = false
         dragging = false
     }
 
-    /** Starts finger tracking: cancels any settle animation and stops the spring. */
+    /** First horizontal move past slop: snapshot position, stop any spring. */
     fun beginDrag() {
-        if (drag.active) return
-        drag.active = true
-        drag.anchor = offset.value
+        dragOffset = offset.value
         dragging = true
+        settlingTarget = null
         settleJob?.cancel()
         settling = false
         scope.launch { offset.stop() }
     }
 
-    fun settleSheet(velocityPx: Float = 0f) {
+    fun settleSheet(velocityPx: Float = 0f, fromDrag: Boolean = false) {
         endDrag()
+        val velocityDp = velocityPx / pxPerDp()
+        // Live finger position: direct writes go to dragOffset during a drag
+        // while the Animatable stays frozen, so offset.value is stale here.
+        // settleSheet only ever runs after beginDrag (release, fling,
+        // cancellation), hence dragOffset is always the truth.
+        val target = resolveSheetTarget(
+            current = dragOffset,
+            velocityDp = velocityDp,
+            partialPx = anchorPx(SheetValue.Partial),
+            expandedPx = expandedPx,
+            allowExpand = allowExpand,
+        )
+        // State first: the animation follows, never the other way round.
+        sheetConsumed = false
+        settlingTarget = target
+        onValueChange(target)
         settleJob?.cancel()
         settling = true
-        settleJob = scope.launch {
-            val velocityDp = velocityPx / pxPerDp()
-            val target = resolveSheetTarget(
-                current = offset.value,
-                velocityDp = velocityDp,
-                partialPx = anchorPx(SheetValue.Partial),
-                expandedPx = expandedPx,
-                allowExpand = allowExpand,
-            )
+        val launched = scope.launch {
             try {
+                offset.stop()
+                // Re-sync after a drag (see the sidebar for why); never snap
+                // on a programmatic settle (dragOffset is stale then).
+                if (fromDrag) offset.snapTo(dragOffset)
                 offset.animateTo(
                     anchorPx(target),
                     animationSpec = spring(
@@ -201,19 +227,28 @@ fun DraggableBottomSheet(
                     initialVelocity = velocityPx.coerceIn(-12000f, 12000f),
                 )
             } finally {
-                dismissPx = 0f
-                settling = false
+                // Only the latest settle may clear the flags.
+                if (settleJob === coroutineContext[Job]) {
+                    dismissPx = 0f
+                    settling = false
+                    settlingTarget = null
+                }
             }
-            onValueChange(target)
         }
+        settleJob = launched
     }
 
-    // Programmatic changes (open, scrim tap, Back, option select): smooth, no velocity.
+    // Programmatic changes (open, scrim tap, Back, option select): smooth, no
+    // velocity. Skipped while the release spring already heads for `value`.
     LaunchedEffect(value, partialPx, expandedPx) {
-        if (!dragging && abs(offset.value - anchorPx(value)) > 1f) {
+        if (!dragging && settlingTarget != value &&
+            abs(offset.value - anchorPx(value)) > 1f
+        ) {
             endDrag()
+            sheetConsumed = false
+            settlingTarget = value
             settleJob?.cancel()
-            settleJob = scope.launch {
+            val launched = scope.launch {
                 try {
                     offset.animateTo(
                         anchorPx(value),
@@ -223,61 +258,61 @@ fun DraggableBottomSheet(
                         ),
                     )
                 } finally {
-                    settling = false
+                    if (settleJob === coroutineContext[Job]) {
+                        settling = false
+                        settlingTarget = null
+                    }
                 }
             }
+            settleJob = launched
         }
     }
 
-    if (value == SheetValue.Closed && !dragging && !settling &&
-        offset.value >= expandedPx - 1f
-    ) {
-        return
-    }
+    // Hooks above always run; only the drawn content is conditional, so the
+    // sheet can never strand a Back handler, an effect, or a modifier setup.
+    val renderSheet = value != SheetValue.Closed || dragging || settling
 
     val minOffset = if (allowExpand) 0f else anchorPx(SheetValue.Partial)
 
     fun applyVerticalDrag(dy: Float) {
         // dy > 0 = finger moving down = sheet shrinking (offset grows).
-        // The anchor accumulates synchronously per delta, so queued frames can
-        // never compute from a stale offset and lose movement; every frame
-        // snaps to the latest anchor and the sheet tracks the finger 1:1.
+        // Synchronous per-delta write (the spring was stopped in beginDrag):
+        // no coroutine hop, no stale reads, under the finger same-frame.
         beginDrag()
-        drag.anchor += dy
-        val desired = drag.anchor
-        val clamped = when {
+        sheetConsumed = true
+        val desired = dragOffset + dy
+        dragOffset = when {
             // Rubber-band above EXPANDED: ~20% of the finger movement.
             desired < minOffset -> minOffset + (desired - minOffset) * 0.2f
             desired > expandedPx -> expandedPx
             else -> desired
         }.coerceIn(minOffset - rubberPx, expandedPx)
-        drag.anchor = clamped
-        val target = clamped
-        scope.launch {
-            offset.stop()
-            offset.snapTo(target)
-        }
     }
 
-    val nested = remember(offset, partialPx, expandedPx, allowExpand) {
+    val nested = remember(offset, partialPx, expandedPx, allowExpand, value) {
         object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source != NestedScrollSource.UserInput) return Offset.Zero
-                val dy = available.y
-                // Swipe up: grow the sheet first; content scrolls only at EXPANDED.
-                if (dy < 0f && offset.value > minOffset + 1f) {
-                    val grow = (-dy).coerceAtMost(offset.value - minOffset)
+            // Single contract: swipe up grows the sheet before the content
+            // scrolls; swipe down scrolls the content first and drags the
+            // sheet only at scroll top. Returns what the sheet consumed.
+            fun absorb(dy: Float): Float {
+                if (dy < 0f && currentOffset() > minOffset + 1f) {
+                    val grow = (-dy).coerceAtMost(currentOffset() - minOffset)
                     if (grow > 0f) {
                         applyVerticalDrag(-grow)
-                        return Offset(0f, -grow)
+                        return -grow
                     }
+                    return 0f
                 }
-                // Swipe down: content scrolls first; the sheet drags at scroll top.
                 if (dy > 0f && scroll.value == 0) {
                     applyVerticalDrag(dy)
-                    return Offset(0f, dy)
+                    return dy
                 }
-                return Offset.Zero
+                return 0f
+            }
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                return Offset(0f, absorb(available.y))
             }
 
             override fun onPostScroll(
@@ -286,17 +321,29 @@ fun DraggableBottomSheet(
                 source: NestedScrollSource,
             ): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
-                // Leftover goes to the sheet (same rules as pre-scroll).
-                return onPreScroll(available, source)
+                // True leftover only: what the content did not take.
+                return Offset(0f, absorb(available.y))
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                // Sheet mid-travel takes the fling first, so the content does
+                // not fling underneath a moving sheet.
+                if (sheetConsumed && abs(currentOffset() - anchorPx(value)) > 1f) {
+                    settleSheet(available.y, fromDrag = true)
+                    return available
+                }
+                return Velocity.Zero
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                // Hand the leftover fling to the sheet so the motion continues.
-                // Velocity follows pointer coordinates (down = +y), the same
-                // convention as the drag deltas and VelocityTracker, so no
-                // sign flip: a downward fling settles down, an upward one up.
-                settleSheet(available.y)
-                return available
+                // A pure content fling that merely hit its bound must never
+                // teleport the sheet: settle only when the sheet took part.
+                if (sheetConsumed && abs(currentOffset() - anchorPx(value)) > 1f) {
+                    settleSheet(available.y, fromDrag = true)
+                    return available
+                }
+                sheetConsumed = false
+                return Velocity.Zero
             }
         }
     }
@@ -324,10 +371,16 @@ fun DraggableBottomSheet(
                                 val width = sheetWidthPx.coerceAtLeast(1f)
                                 val flingX = abs(v?.x ?: 0f) > SHEET_FLING_DP * pxPerDp()
                                 if (abs(dismissPx) > width / 4f || (flingX && dismissPx != 0f)) {
+                                    // State first through the same settle path, then
+                                    // slide the visual off; the animation follows.
                                     val target = width * sign(dismissPx).let { if (it == 0f) 1f else it }
-                                    settling = true
+                                    endDrag()
+                                    sheetConsumed = false
+                                    settlingTarget = SheetValue.Closed
+                                    onValueChange(SheetValue.Closed)
                                     settleJob?.cancel()
-                                    settleJob = scope.launch {
+                                    settling = true
+                                    val launched = scope.launch {
                                         try {
                                             animate(
                                                 initialValue = dismissPx,
@@ -336,15 +389,20 @@ fun DraggableBottomSheet(
                                                 initialVelocity = (v?.x ?: 0f).coerceIn(-12000f, 12000f),
                                             ) { frame, _ -> dismissPx = frame }
                                         } finally {
-                                            dismissPx = 0f
-                                            settling = false
+                                            if (settleJob === coroutineContext[Job]) {
+                                                dismissPx = 0f
+                                                settling = false
+                                                settlingTarget = null
+                                            }
                                         }
-                                        onValueChange(SheetValue.Closed)
                                     }
+                                    settleJob = launched
                                 } else {
-                                    settling = true
+                                    endDrag()
+                                    settlingTarget = null
                                     settleJob?.cancel()
-                                    settleJob = scope.launch {
+                                    settling = true
+                                    val launched = scope.launch {
                                         try {
                                             animate(
                                                 initialValue = dismissPx,
@@ -352,14 +410,17 @@ fun DraggableBottomSheet(
                                                 animationSpec = spring(0.85f, Spring.StiffnessMediumLow),
                                             ) { frame, _ -> dismissPx = frame }
                                         } finally {
-                                            settling = false
+                                            if (settleJob === coroutineContext[Job]) {
+                                                settling = false
+                                            }
                                         }
                                     }
+                                    settleJob = launched
                                 }
                             } else {
-                            settleSheet(v?.y ?: 0f)
-                        }
-                        endDrag()
+                                settleSheet(v?.y ?: 0f, fromDrag = true)
+                            }
+                            endDrag()
                         } else {
                             // Plain tap: never consume, so handle clicks still fire.
                             return@awaitEachGesture
@@ -407,61 +468,139 @@ fun DraggableBottomSheet(
                 if (lockedVertical || lockedHorizontal) {
                     endDrag()
                     dismissPx = 0f
-                    settleSheet()
+                    settleSheet(fromDrag = true)
                 }
             }
         }
     }
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = (1f - offset.value / expandedPx.coerceAtLeast(1f)) * scrimMaxAlpha }
-                .background(Color.Black)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = { onValueChange(SheetValue.Closed) },
-                ),
-        )
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .widthIn(max = WahariLayout.sheetMax)
-                .fillMaxWidth()
-                .height(expandedHeight)
-                .onSizeChanged { sheetWidthPx = it.width.toFloat() }
-                .graphicsLayer {
-                    translationY = offset.value
-                    translationX = dismissPx
-                    val w = sheetWidthPx.coerceAtLeast(1f)
-                    alpha = (1f - abs(dismissPx) / (w * 0.9f)).coerceIn(0f, 1f)
-                }
-                .clip(sheetShape)
-                .background(WahariTokens.bgSheet)
-                .imePadding(),
-        ) {
-            Column(Modifier.fillMaxWidth().then(headerDrag)) {
-                header()
-            }
+    if (renderSheet) {
+        BoxWithConstraints(modifier.fillMaxSize().testTag("sheet")) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val pos = if (dragging) dragOffset else offset.value
+                        alpha = (1f - pos / expandedPx.coerceAtLeast(1f)) * scrimMaxAlpha
+                    }
+                    .background(Color.Black)
+                    .testTag("sheet_scrim")
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClickLabel = "Close",
+                        onClick = { onValueChange(SheetValue.Closed) },
+                    ),
+            )
             Column(
                 Modifier
+                    .align(Alignment.BottomCenter)
+                    .widthIn(max = WahariLayout.sheetMax)
                     .fillMaxWidth()
-                    .weight(1f)
-                    .nestedScroll(nested)
-                    .verticalScroll(scroll),
+                    .height(expandedHeight)
+                    .onSizeChanged { sheetWidthPx = it.width.toFloat() }
+                    .graphicsLayer {
+                        translationY = if (dragging) dragOffset else offset.value
+                        translationX = dismissPx
+                        val w = sheetWidthPx.coerceAtLeast(1f)
+                        alpha = (1f - abs(dismissPx) / (w * 0.9f)).coerceIn(0f, 1f)
+                    }
+                    .clip(sheetShape)
+                    .background(WahariTokens.bgSheet)
+                    .imePadding()
+                    .semantics {
+                        dismiss("Close") {
+                            onValueChange(SheetValue.Closed)
+                            true
+                        }
+                        customActions = buildList {
+                            if (allowExpand && value != SheetValue.Expanded) {
+                                add(
+                                    CustomAccessibilityAction("Expand") {
+                                        onValueChange(SheetValue.Expanded)
+                                        true
+                                    },
+                                )
+                            }
+                            if (value != SheetValue.Partial) {
+                                add(
+                                    CustomAccessibilityAction("Collapse to half") {
+                                        onValueChange(if (allowExpand) SheetValue.Partial else SheetValue.Closed)
+                                        true
+                                    },
+                                )
+                            }
+                        }
+                    },
             ) {
-                content(scroll)
+                Column(Modifier.fillMaxWidth().testTag("sheet_header").then(headerDrag)) {
+                    header()
+                }
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .testTag("sheet_content")
+                        .nestedScroll(nested)
+                        .verticalScroll(scroll),
+                ) {
+                    content(scroll)
+                }
             }
         }
     }
 
-    BackHandler(enabled = value != SheetValue.Closed) {
-        if (value == SheetValue.Expanded && allowExpand) {
-            onValueChange(SheetValue.Partial)
-        } else {
-            onValueChange(SheetValue.Closed)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        PredictiveBackHandler(enabled = value != SheetValue.Closed && !dragging) {
+            // Scrub toward closed with the back gesture; state already open.
+            settleJob?.cancel()
+            try {
+                offset.stop()
+            } catch (_: CancellationException) {
+                // Stop was itself cancelled: restore below.
+            }
+            val start = offset.value
+            val closedAnchor = anchorPx(SheetValue.Closed)
+            var completed = false
+            try {
+                it.collect { event ->
+                    offset.snapTo(start + (closedAnchor - start) * event.progress.coerceIn(0f, 1f))
+                }
+                completed = true
+            } finally {
+                if (completed) {
+                    onValueChange(SheetValue.Closed)
+                } else {
+                    // Gesture cancelled: glide back to the current anchor.
+                    settlingTarget = value
+                    settleJob?.cancel()
+                    val launched = scope.launch {
+                        try {
+                            offset.animateTo(
+                                anchorPx(value),
+                                animationSpec = spring(
+                                    dampingRatio = 0.85f,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            )
+                        } finally {
+                            if (settleJob === coroutineContext[Job]) {
+                                settling = false
+                                settlingTarget = null
+                            }
+                        }
+                    }
+                    settleJob = launched
+                }
+            }
+        }
+    } else {
+        BackHandler(enabled = value != SheetValue.Closed) {
+            if (value == SheetValue.Expanded && allowExpand) {
+                onValueChange(SheetValue.Partial)
+            } else {
+                onValueChange(SheetValue.Closed)
+            }
         }
     }
 }

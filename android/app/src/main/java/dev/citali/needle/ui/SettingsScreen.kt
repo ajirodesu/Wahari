@@ -1,5 +1,7 @@
 package dev.citali.needle.ui
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -68,6 +70,7 @@ import dev.citali.needle.remote.NeedleRemoteService
 import dev.citali.needle.remote.TelegramBridge
 import dev.citali.needle.tools.AccessibilityState
 import dev.citali.needle.tools.AccessibilityAutoEnable
+import dev.citali.needle.tools.media.MediaPlaybackVerifier
 import dev.citali.needle.tools.ActivityBridges
 import dev.citali.needle.tools.DevicePermissions
 import dev.citali.needle.tools.PhoneTools
@@ -454,6 +457,51 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                     style = WahariTypography.sectionSubtitle,
                 )
             }
+            KeyValue(
+                "Media search fallback",
+                if (a11yState == AccessibilityState.UiState.READY) {
+                    "available — the play_media tool can drive in-app search"
+                } else {
+                    "unavailable — play_media uses media APIs, then a browser page"
+                },
+            )
+            if (a11yState != AccessibilityState.UiState.READY) {
+                Text(
+                    "\"Open YouTube and play …\" still works through the app's media service; " +
+                        "only the guided in-app search needs the automation service above. " +
+                        "Playback is only ever reported as playing when it is verified.",
+                    style = WahariTypography.sectionSubtitle,
+                )
+            }
+            val listenerOn = remember(a11yServiceOn, keepA11y) {
+                MediaPlaybackVerifier.listenerEnabled(context)
+            }
+            KeyValue(
+                "Playback confirmation",
+                if (listenerOn) "verified via media sessions"
+                else "limited — enable notification access to confirm playback",
+            )
+            if (!listenerOn) {
+                Text(
+                    "With notification access, Wahari confirms what is really playing through " +
+                        "the system's media sessions. Without it, an opened app reports " +
+                        "launched, never playing.",
+                    style = WahariTypography.sectionSubtitle,
+                )
+                ActionRow {
+                    SecondaryButton(
+                        text = "Notification access",
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        },
+                    )
+                }
+            }
             if (history.isNotEmpty()) {
                 Text("Recent tasks", style = WahariTypography.optionTitle.copy(fontSize = 14.spFix()))
                 Text("Only the command text and its outcome are stored.", style = WahariTypography.sectionSubtitle)
@@ -577,8 +625,6 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             engineVersion = ModelRepository.ENGINE_VERSION,
             foregroundHooksActive = ActivityBridges.hasCamera,
         )
-
-        DeveloperCertificateCard()
     }
 }
 

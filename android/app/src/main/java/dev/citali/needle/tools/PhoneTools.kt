@@ -38,6 +38,8 @@ import androidx.core.content.ContextCompat
 import dev.citali.needle.engine.NeedleParam
 import dev.citali.needle.engine.NeedleTool
 import dev.citali.needle.pilot.data.AppInventory
+import dev.citali.needle.tools.media.MediaPlaybackExecutor
+import dev.citali.needle.tools.media.PlayRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -366,6 +368,40 @@ object PhoneTools {
                 return@tool "Could not open the link: ${e.message}"
             }
             "Opened $raw."
+        },
+
+        tool(
+            name = "play_media",
+            description = "Start music or video playback in an installed app, e.g. YouTube, Spotify or VLC. " +
+                "Give what to play and optionally which app and source; tries local files, the app's media API, " +
+                "then its search UI, then a browser search page.",
+            params = listOf(
+                stringParam("query", "What to play: artist, song, video title, or file name."),
+                stringParam("app", "Which app to play in, e.g. YouTube, Spotify or VLC. Omit for automatic.", required = false),
+                NeedleParam(
+                    name = "media_type",
+                    type = "string",
+                    description = "music for songs, video for videos.",
+                    required = false,
+                    enumValues = listOf("music", "video", "any"),
+                ),
+                NeedleParam(
+                    name = "source",
+                    type = "string",
+                    description = "local for downloaded files only, online for streaming, any for either.",
+                    required = false,
+                    enumValues = listOf("online", "local", "any"),
+                ),
+            ),
+        ) { args ->
+            val query = args.require("query")
+            val app = args.optString("app").trim().ifBlank { null }
+            val mediaType = args.optString("media_type").trim().lowercase()
+                .takeIf { it == "music" || it == "video" } ?: "any"
+            val source = args.optString("source").trim().lowercase()
+                .takeIf { it == "online" || it == "local" } ?: "any"
+            val request = PlayRequest(query = query, rawApp = app, mediaType = mediaType, source = source)
+            MediaPlaybackExecutor.play(context, request).toModelString()
         },
 
         tool(

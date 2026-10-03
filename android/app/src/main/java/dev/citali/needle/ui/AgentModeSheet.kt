@@ -37,6 +37,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.citali.needle.engine.NeedlePrefs
 import dev.citali.needle.ui.theme.WahariIcons
@@ -85,6 +88,8 @@ fun AgentModeSheet(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        role = Role.Button,
+                        onClickLabel = "Toggle sheet",
                         onClick = { if (snap == SheetSnap.Full) onSnap(SheetSnap.Half) else onSnap(SheetSnap.Closed) },
                     ),
                 contentAlignment = Alignment.Center,
@@ -93,7 +98,8 @@ fun AgentModeSheet(
                     modifier = Modifier
                         .size(width = 36.dp, height = 4.dp)
                         .clip(CircleShape)
-                        .background(WahariTokens.handle),
+                        .background(WahariTokens.handle)
+                        .semantics { contentDescription = "Drag handle" },
                 )
             }
             Box(

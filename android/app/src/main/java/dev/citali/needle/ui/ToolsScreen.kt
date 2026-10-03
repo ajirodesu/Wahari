@@ -5,7 +5,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,6 +16,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.citali.needle.engine.NeedlePrefs
 import dev.citali.needle.tools.ActivityBridges
 import dev.citali.needle.tools.DevicePermissions
@@ -28,13 +33,24 @@ import org.json.JSONObject
 fun ToolsContent(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val packs = remember { NeedlePrefs.toolPacks(context) }
+    // Packs and runtime permissions can change in Settings or system UI;
+    // re-read the durable/OS sources on every resume instead of caching once.
+    var refreshTick by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) refreshTick++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val packs = remember(refreshTick) { NeedlePrefs.toolPacks(context) }
     val output = remember { mutableStateListOf<String>() }
     // The catalogue is rebuilt on every call; describe it only when the
     // enabled packs change instead of on each keystroke or output update.
     val toolLines = remember(context, packs) { PhoneTools.describe(context, packs) }
 
-    var permissions by remember { mutableStateOf(DevicePermissions.missing(context)) }
+    var permissions by remember(refreshTick) { mutableStateOf(DevicePermissions.missing(context)) }
     var sayText by remember { mutableStateOf("Hello from Wahari") }
     var shareText by remember { mutableStateOf("Sent from Wahari") }
 

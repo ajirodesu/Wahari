@@ -31,7 +31,7 @@ class NeedleRemoteService : Service() {
         val token = intent?.getStringExtra(EXTRA_TOKEN)?.takeIf { it.isNotBlank() }
             ?: NeedlePrefs.telegramToken(this)
         startAsForeground()
-        if (token.isBlank()) {
+        if (token.isBlank() || NeedlePrefs.telegramAdminIds(this).isEmpty()) {
             stopSelf()
             return START_NOT_STICKY
         }

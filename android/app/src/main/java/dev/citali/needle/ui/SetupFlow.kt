@@ -67,8 +67,12 @@ private enum class SetupPage { Intro, Needle, Accessibility }
 /** First incomplete setup step, or null when everything is done. */
 private fun firstIncompleteStep(context: android.content.Context): SetupPage? =
     if (!ModelRepository.hasWeights(context)) SetupPage.Needle
-    else if (!NeedleAccessibilityService.isConnected()) SetupPage.Accessibility
+    else if (!DevicePermissions.isAccessibilityServiceEnabled(context)) SetupPage.Accessibility
     else null
+
+/** Live service state: the OS setting is the truth, the bound instance a fast path. */
+private fun isServiceOn(context: android.content.Context): Boolean =
+    NeedleAccessibilityService.isConnected() || DevicePermissions.isAccessibilityServiceEnabled(context)
 
 /**
  * First-run setup: Intro (once) → Needle 3 → Accessibility → app.
@@ -96,8 +100,9 @@ fun SetupFlow(onFinished: () -> Unit) {
         )
     }
     val current = SetupPage.valueOf(history.last())
-    var accessibilityOn by remember { mutableStateOf(NeedleAccessibilityService.isConnected()) }
+    var accessibilityOn by remember { mutableStateOf(isServiceOn(context)) }
     var weightsPresent by remember { mutableStateOf(ModelRepository.hasWeights(context)) }
+    var a11ySetupDone by remember { mutableStateOf(NeedlePrefs.accessibilitySetupCompleted(context)) }
 
     fun persistStep(page: SetupPage) {
         NeedlePrefs.setSetupStep(
@@ -125,6 +130,9 @@ fun SetupFlow(onFinished: () -> Unit) {
     fun finish() {
         NeedlePrefs.setSetupStep(context, NeedlePrefs.SETUP_DONE)
         NeedlePrefs.setSetupComplete(context, true)
+        if (isServiceOn(context)) {
+            NeedlePrefs.setAccessibilitySetupCompleted(context, true)
+        }
         onFinished()
     }
 
@@ -156,16 +164,23 @@ fun SetupFlow(onFinished: () -> Unit) {
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                accessibilityOn = NeedleAccessibilityService.isConnected()
+                accessibilityOn = isServiceOn(context)
                 weightsPresent = ModelRepository.hasWeights(context)
+                a11ySetupDone = NeedlePrefs.accessibilitySetupCompleted(context)
             }
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
 
-    // Enabling the service in system settings auto-advances the flow.
+    // Enabling the service in system settings records setup completion and
+    // auto-advances the flow. Completion is durable; the live OS state is
+    // re-queried on every resume instead of trusting the stored flag.
     LaunchedEffect(accessibilityOn, current) {
+        if (accessibilityOn && !NeedlePrefs.accessibilitySetupCompleted(context)) {
+            NeedlePrefs.setAccessibilitySetupCompleted(context, true)
+            a11ySetupDone = true
+        }
         if (current == SetupPage.Accessibility && accessibilityOn) {
             advanceFrom(SetupPage.Accessibility)
         }
@@ -222,6 +237,7 @@ fun SetupFlow(onFinished: () -> Unit) {
                         )
                         SetupPage.Accessibility -> AccessibilityStep(
                             enabled = accessibilityOn,
+                            setupCompletedBefore = a11ySetupDone,
                             onContinue = { advanceFrom(SetupPage.Accessibility) },
                             onSkip = { skipFrom(SetupPage.Accessibility) },
                         )
@@ -399,6 +415,7 @@ private fun NeedleStep(
 @Composable
 private fun AccessibilityStep(
     enabled: Boolean,
+    setupCompletedBefore: Boolean,
     onContinue: () -> Unit,
     onSkip: () -> Unit,
 ) {
@@ -412,8 +429,18 @@ private fun AccessibilityStep(
         ) {
             KeyValue(
                 "Service",
-                if (enabled) "Accessibility service is enabled" else "Accessibility service is disabled",
+                when {
+                    enabled -> "Accessibility service is enabled"
+                    setupCompletedBefore -> "Completed before · currently disabled"
+                    else -> "Accessibility service is disabled"
+                },
             )
+            if (!enabled && setupCompletedBefore) {
+                Text(
+                    "You completed this setup before. Re-enable the service below — nothing else needs redoing.",
+                    style = WahariTypography.sectionSubtitle,
+                )
+            }
             ActionRow {
                 PrimaryButton(
                     text = "Open Accessibility Settings",
@@ -480,7 +507,7 @@ private fun PreviewSetupAccessibility() {
                     .padding(horizontal = 18.dp, vertical = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AccessibilityStep(enabled = false, onContinue = {}, onSkip = {})
+                AccessibilityStep(enabled = false, setupCompletedBefore = false, onContinue = {}, onSkip = {})
             }
         }
     }

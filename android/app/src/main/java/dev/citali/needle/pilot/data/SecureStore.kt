@@ -22,6 +22,9 @@ object SecureStore {
     private const val ALIAS = "needle_api_key"
     private const val KEY_CIPHER = "api_key_cipher"
     private const val KEY_IV = "api_key_iv"
+    private const val T_ALIAS = "needle_telegram_token"
+    private const val T_CIPHER = "telegram_token_cipher"
+    private const val T_IV = "telegram_token_iv"
     private const val ANDROID_KEYSTORE = "AndroidKeyStore"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val TAG_SIZE_BITS = 128
@@ -88,21 +91,82 @@ object SecureStore {
         prefs(context).edit().remove(KEY_CIPHER).remove(KEY_IV).commit()
     }
 
+    /**
+     * Telegram bot token, encrypted with its own Keystore entry so a key
+     * rotation or loss for one secret never affects the other. Blank clears.
+     * Returns the stored token, or null when none is saved (or it became
+     * undecryptable, in which case the dead blob is dropped).
+     */
+    fun getTelegramToken(context: Context): String? =
+        decryptSecret(context, T_ALIAS, T_CIPHER, T_IV)
+
+    fun saveTelegramToken(context: Context, value: String): Boolean =
+        encryptSecret(context, T_ALIAS, T_CIPHER, T_IV, value)
+
+    private fun encryptSecret(
+        context: Context,
+        alias: String,
+        cipherKey: String,
+        ivKey: String,
+        value: String,
+    ): Boolean {
+        val prefs = prefs(context)
+        if (value.isBlank()) {
+            return prefs.edit().remove(cipherKey).remove(ivKey).commit()
+        }
+        return runCatching {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, key(alias))
+            val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+            val stored = prefs.edit()
+                .putString(cipherKey, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                .putString(ivKey, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                .commit()
+            stored && decryptSecret(context, alias, cipherKey, ivKey) == value
+        }.getOrDefault(false)
+    }
+
+    private fun decryptSecret(
+        context: Context,
+        alias: String,
+        cipherKey: String,
+        ivKey: String,
+    ): String? {
+        val prefs = prefs(context)
+        val cipherB64 = prefs.getString(cipherKey, null) ?: return null
+        val ivB64 = prefs.getString(ivKey, null) ?: return null
+        val decrypted = runCatching {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                loadExistingKey(alias) ?: return@runCatching null,
+                GCMParameterSpec(TAG_SIZE_BITS, Base64.decode(ivB64, Base64.NO_WRAP))
+            )
+            String(cipher.doFinal(Base64.decode(cipherB64, Base64.NO_WRAP)), Charsets.UTF_8)
+        }.getOrNull()
+
+        if (decrypted.isNullOrBlank()) {
+            prefs.edit().remove(cipherKey).remove(ivKey).apply()
+            return null
+        }
+        return decrypted
+    }
+
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /** The existing Keystore entry, or null if it is missing. Never creates one. */
-    private fun loadExistingKey(): SecretKey? = runCatching {
+    private fun loadExistingKey(alias: String = ALIAS): SecretKey? = runCatching {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        keyStore.getKey(ALIAS, null) as? SecretKey
+        keyStore.getKey(alias, null) as? SecretKey
     }.getOrNull()
 
-    private fun key(): SecretKey {
-        loadExistingKey()?.let { return it }
+    private fun key(alias: String = ALIAS): SecretKey {
+        loadExistingKey(alias)?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
         generator.init(
             KeyGenParameterSpec.Builder(
-                ALIAS,
+                alias,
                 KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
             )
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)

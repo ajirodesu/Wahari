@@ -37,8 +37,10 @@ object TelegramBridge {
     data class State(
         val running: Boolean = false,
         val handled: Int = 0,
+        val denied: Int = 0,
         val lastMessage: String? = null,
         val lastReply: String? = null,
+        val lastDeniedUser: Long? = null,
         val error: String? = null,
     )
 
@@ -73,6 +75,18 @@ object TelegramBridge {
     fun isRunning(): Boolean = job?.isActive == true
 
     private suspend fun pollLoop(context: Context, token: String) {
+        // Discard stale history on (re)start so old commands are never
+        // re-executed as duplicates (offset=0 would replay unacked updates).
+        offset = runCatching {
+            val latest = getUpdates(token)
+            latest.mapNotNull { it.optLong("update_id").takeIf { id -> id >= 0 } }.maxOrNull()?.plus(1)
+        }.getOrNull() ?: 0L
+        if (offset == 0L) {
+            // Fallback: tell Telegram to drop pending updates.
+            runCatching {
+                request(URL("$API$token/getUpdates?timeout=0&limit=1&offset=-1"), null)
+            }
+        }
         while (scope?.isActive == true) {
             try {
                 val updates = getUpdates(token)
@@ -80,11 +94,24 @@ object TelegramBridge {
                     val updateId = update.optLong("update_id", -1L)
                     if (updateId >= 0) offset = updateId + 1
                     val message = update.optJSONObject("message") ?: continue
-                    val chatId = message.optJSONObject("chat")?.optLong("id") ?: continue
+                    val chat = message.optJSONObject("chat") ?: continue
+                    // Private/DM chats only: group and channel messages are ignored.
+                    if (chat.optString("type") != "private") continue
+                    val chatId = chat.optLong("id") ?: continue
+                    val senderId = message.optJSONObject("from")?.optLong("id", 0L) ?: 0L
                     val text = message.optString("text").trim()
                     if (text.isEmpty()) continue
+                    if (!NeedlePrefs.isTelegramAdmin(context, senderId)) {
+                        _state.value = _state.value.copy(
+                            denied = _state.value.denied + 1,
+                            lastDeniedUser = senderId.takeIf { it != 0L },
+                            error = null,
+                        )
+                        sendMessage(token, chatId, deniedReply(context, senderId, text))
+                        continue
+                    }
                     _state.value = _state.value.copy(lastMessage = text)
-                    val reply = handle(context, token, text)
+                    val reply = handle(context, token, text, senderId)
                     sendMessage(token, chatId, reply)
                     _state.value = _state.value.copy(
                         handled = _state.value.handled + 1,
@@ -102,10 +129,20 @@ object TelegramBridge {
         }
     }
 
-    private suspend fun handle(context: Context, token: String, text: String): String {
+    private suspend fun handle(context: Context, token: String, text: String, senderId: Long = 0L): String {
         if (text == "/start" || text == "/help") {
             return "Wahari is listening. Text me a command such as \"turn on the flashlight\", " +
-                "\"what is my battery level?\" or \"send sms to +91... saying hello\"."
+                "\"what is my battery level?\" or \"send sms to +91... saying hello\". " +
+                "Send /myid to see your numeric Telegram user ID."
+        }
+        if (text == "/myid") {
+            val idLine = if (senderId != 0L) "Your user ID is $senderId. " else ""
+            val admins = NeedlePrefs.telegramAdminIds(context)
+            return if (admins.isEmpty()) {
+                idLine + "No admin IDs are saved yet. Open Settings, save your user ID, then only listed IDs can use this bot."
+            } else {
+                idLine + "Saved admin IDs: ${admins.sorted().joinToString(", ")}."
+            }
         }
         if (text == "/stop") {
             NeedlePrefs.setTelegramEnabled(context, false)
@@ -131,6 +168,18 @@ object TelegramBridge {
         }.trim()
     }
 
+    private fun deniedReply(context: Context, senderId: Long, text: String): String {
+        if (text == "/myid") {
+            // Let anyone discover their own ID so the owner can paste it into Settings.
+            val idLine = if (senderId != 0L) "Your user ID is $senderId. " else ""
+            return idLine + "Ask the phone owner to save this ID in Settings under Remote control."
+        }
+        if (NeedlePrefs.telegramAdminIds(context).isEmpty()) {
+            return "Remote control is locked: no admin IDs are saved yet. The owner must save a user ID in Settings first (send /myid to see yours)."
+        }
+        return "Access denied. This bot only responds to its saved admin IDs."
+    }
+
     private fun getUpdates(token: String): List<JSONObject> {
         val url = URL("$API$token/getUpdates?timeout=25&limit=10&offset=$offset")
         val body = request(url, null)
@@ -143,8 +192,12 @@ object TelegramBridge {
     }
 
     private fun sendMessage(token: String, chatId: Long, text: String) {
+        val safe = text.take(3_900).let {
+            // Avoid splitting a UTF-16 surrogate pair at the cut point.
+            if (it.isNotEmpty() && Character.isHighSurrogate(it.last())) it.dropLast(1) else it
+        }
         val url = URL("$API$token/sendMessage")
-        val payload = "chat_id=$chatId&text=" + URLEncoder.encode(text.take(3_900), "UTF-8")
+        val payload = "chat_id=$chatId&text=" + URLEncoder.encode(safe, "UTF-8")
         runCatching { request(url, payload) }
             .onFailure { Log.w(TAG, "send failed: ${it.message}") }
     }

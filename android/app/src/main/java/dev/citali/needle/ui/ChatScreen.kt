@@ -425,12 +425,32 @@ fun ChatScreen(
         }
 
         // Tap anywhere outside a bubble closes the popup; scrolls pass through.
+        // Tapping outside the composer capsule unselects it (clears focus, hides keyboard).
         if (popupIndex != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(popupIndex) {
-                        detectTapGestures(onTap = { onPopupIndex(null) })
+                        detectTapGestures(
+                            onTap = {
+                                onPopupIndex(null)
+                                focusManager.clearFocus(force = true)
+                                keyboard?.hide()
+                            },
+                        )
+                    },
+            )
+        } else if (composerFocused) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                focusManager.clearFocus(force = true)
+                                keyboard?.hide()
+                            },
+                        )
                     },
             )
         }

@@ -1,6 +1,7 @@
 package dev.citali.needle.tools
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -8,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import dev.citali.needle.pilot.accessibility.NeedleAccessibilityService
 
 /**
  * The permissions the phone tools ask for, and a friendly name for each, so the
@@ -66,6 +68,30 @@ object DevicePermissions {
             .setData(Uri.fromParts("package", context.packageName, null))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { context.startActivity(intent) }
+    }
+
+    /**
+     * The real OS truth: is Wahari's Accessibility Service currently enabled
+     * in system settings? Read from Settings.Secure, so it is correct even
+     * when the service process binding ([NeedleAccessibilityService.instance])
+     * is momentarily null (cold start, reboot, temporary disconnect).
+     *
+     * This is the *live* state only. Historical setup completion is stored
+     * separately in durable prefs and must not be derived from this.
+     */
+    fun isAccessibilityServiceEnabled(context: Context): Boolean {
+        val expected = ComponentName(context, NeedleAccessibilityService::class.java).flattenToString()
+        val enabled = runCatching {
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            )
+        }.getOrNull() ?: return NeedleAccessibilityService.isConnected()
+        if (enabled.isBlank()) return false
+        return enabled.split(':').any { entry ->
+            entry == expected ||
+                entry.endsWith("/" + NeedleAccessibilityService::class.java.name, ignoreCase = true)
+        }
     }
 
     fun canWriteSettings(context: Context): Boolean =

@@ -183,14 +183,25 @@ object PhoneTools {
             params = listOf(boolParam("on", "true to switch the flashlight on, false for off.")),
         ) { args ->
             val on = args.optBoolean("on", false)
+            if (!hasPermission(context, Manifest.permission.CAMERA)) {
+                return@tool "Camera permission is missing, so the flashlight cannot be switched. Grant it from the Tools tab, then ask again."
+            }
             val cameraManager = context.getSystemService(CameraManager::class.java)
                 ?: return@tool "No camera service on this device."
-            val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
-                cameraManager.getCameraCharacteristics(id)
-                    .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-            } ?: return@tool "This device has no camera flashlight."
-            cameraManager.setTorchMode(cameraId, on)
-            "Flashlight turned ${if (on) "on" else "off"}."
+            try {
+                val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
+                    runCatching {
+                        cameraManager.getCameraCharacteristics(id)
+                            .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                    }.getOrDefault(false)
+                } ?: return@tool "This device has no camera flashlight."
+                cameraManager.setTorchMode(cameraId, on)
+                "Flashlight turned ${if (on) "on" else "off"}."
+            } catch (e: SecurityException) {
+                "Camera permission was denied, so the flashlight cannot be switched."
+            } catch (e: Exception) {
+                "Could not switch the flashlight: ${e.message}"
+            }
         },
 
         tool(
@@ -243,10 +254,16 @@ object PhoneTools {
                 "Wahari needs the \"Modify system settings\" permission to change brightness. " +
                     "Grant it from the Tools tab, then ask again."
             } else {
-                val resolver = context.contentResolver
-                Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
-                Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS, level)
-                "Screen brightness set to $level."
+                try {
+                    val resolver = context.contentResolver
+                    Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+                    Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS, level)
+                    "Screen brightness set to $level."
+                } catch (e: SecurityException) {
+                    "Wahari needs the \"Modify system settings\" permission to change brightness."
+                } catch (e: Exception) {
+                    "Could not change brightness: ${e.message}"
+                }
             }
         },
 
@@ -319,7 +336,11 @@ object PhoneTools {
             val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
                 ?: return@tool "${app.label} has no launcher screen."
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
+            try {
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                return@tool "Could not open ${app.label}: ${e.message}"
+            }
             "Opened ${app.label}."
         },
 
@@ -329,10 +350,16 @@ object PhoneTools {
             params = listOf(stringParam("url", "The link to open.")),
         ) { args ->
             val raw = args.require("url")
-            val url = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "https://$raw"
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-            "Opened $url."
+            if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+                return@tool "That is not a valid link. It must start with http:// or https://"
+            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(raw)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                return@tool "Could not open the link: ${e.message}"
+            }
+            "Opened $raw."
         },
 
         tool(
@@ -343,18 +370,37 @@ object PhoneTools {
                 stringParam("title", "Name to show in the notification.", required = false),
             ),
         ) { args ->
-            val url = args.require("url")
+            val url = args.require("url").trim()
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                return@tool "That is not a valid link. It must start with http:// or https://"
+            }
             val title = args.optString("title").ifBlank { "Wahari download" }
             val manager = context.getSystemService(DownloadManager::class.java)
                 ?: return@tool "No download manager on this device."
+            val safeName = (Uri.parse(url).lastPathSegment
+                ?.substringAfterLast("/")
+                ?.substringBefore("?")
+                ?.trim()
+                ?.filter { it.isLetterOrDigit() || it in "._-" }
+                ?.takeLast(80)
+                ?.ifBlank { null })
+                ?: "wahari-download.bin"
             val request = DownloadManager.Request(Uri.parse(url))
                 .setTitle(title)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            runCatching {
-                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, Uri.parse(url).lastPathSegment ?: title)
+            try {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, safeName)
+                }
+            } catch (e: Exception) {
+                return@tool "Could not start the download: ${e.message}"
             }
-            val id = manager.enqueue(request)
-            "Download started (id $id); it continues in the background."
+            try {
+                val id = manager.enqueue(request)
+                "Download started (id $id); it continues in the background."
+            } catch (e: Exception) {
+                "Could not start the download: ${e.message}"
+            }
         },
     )
 
@@ -418,15 +464,25 @@ object PhoneTools {
         ) { args ->
             val number = args.require("phone_number")
             if (hasPermission(context, Manifest.permission.CALL_PHONE)) {
-                val telecom = context.getSystemService(TelecomManager::class.java)
-                    ?: return@tool "No telecom service on this device."
-                telecom.placeCall(Uri.parse("tel:$number"), Bundle())
-                "Calling $number."
+                try {
+                    val telecom = context.getSystemService(TelecomManager::class.java)
+                        ?: return@tool "No telecom service on this device."
+                    telecom.placeCall(Uri.parse("tel:$number"), Bundle())
+                    "Calling $number."
+                } catch (e: SecurityException) {
+                    "Phone permission was denied, so the call cannot be placed directly."
+                } catch (e: Exception) {
+                    "Could not place the call: ${e.message}"
+                }
             } else {
-                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-                "Opened the dialer with $number. Grant the phone permission to place calls directly."
+                try {
+                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    "Opened the dialer with $number. Grant the phone permission to place calls directly."
+                } catch (e: Exception) {
+                    "Could not open the dialer: ${e.message}"
+                }
             }
         },
 
@@ -534,7 +590,8 @@ object PhoneTools {
         val level = status?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = status?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
         val percent = if (level >= 0 && scale > 0) level * 100 / scale else -1
-        val temperature = status?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)?.let { it / 10.0 }
+        val rawTemp = status?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
+        val temperature = if (rawTemp != Int.MIN_VALUE) rawTemp / 10.0 else null
         val manager = context.getSystemService(BatteryManager::class.java)
         val currentNow = manager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         val json = JSONObject()
@@ -644,18 +701,24 @@ object PhoneTools {
     }
 
     private fun scanWifi(context: Context, limit: Int): String {
-        if (!hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)) {
+        if (!hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) &&
+            !hasPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+        ) {
             return "Scanning Wi-Fi needs the location permission. Grant it from the Tools tab."
         }
         val manager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
             ?: return "No Wi-Fi service on this device."
         return try {
             @Suppress("DEPRECATION")
-            manager.startScan()
+            val scanStarted = manager.startScan()
             @Suppress("DEPRECATION")
             val results = manager.scanResults
             if (results.isEmpty()) {
-                "No networks found. Android throttles Wi-Fi scans, so try again in a moment."
+                if (!scanStarted) {
+                    "The Wi-Fi scan was throttled by Android; showing nothing fresh. Try again in a moment."
+                } else {
+                    "No networks found. Try again in a moment."
+                }
             } else {
                 val array = JSONArray()
                 results.sortedByDescending { it.level }.take(limit).forEach { result ->
@@ -839,7 +902,15 @@ object PhoneTools {
 
     private fun JSONObject.requireInt(key: String): Int {
         if (!has(key) || isNull(key)) throw IllegalArgumentException("The tool needs a value for '$key'.")
-        return optInt(key)
+        // optInt returns 0 on type mismatch (e.g. model sends "5"), so coerce strings explicitly.
+        val raw = get(key)
+        val parsed = when (raw) {
+            is Number -> raw.toInt()
+            is String -> raw.trim().toIntOrNull()
+            is Boolean -> if (raw) 1 else 0
+            else -> null
+        } ?: throw IllegalArgumentException("The tool needs an integer value for '$key'.")
+        return parsed
     }
 
     /** Text-to-speech needs one engine per process and a queue of in-flight utterances. */
@@ -864,10 +935,17 @@ object PhoneTools {
                 pending.remove(utteranceId)
                 return "The text-to-speech engine refused the request."
             }
-            val finished = withTimeoutOrNull(90_000) { done.await() }
+            val finished = withTimeoutOrNull(90_000) {
+                try {
+                    done.await()
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+            }
             pending.remove(utteranceId)
-            return if (finished == null) {
-                "Text-to-speech timed out."
+            return if (finished != true) {
+                "Text-to-speech failed or timed out."
             } else {
                 "Spoke aloud: $text"
             }
@@ -882,7 +960,7 @@ object PhoneTools {
                 engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) = Unit
                     override fun onError(utteranceId: String?) {
-                        utteranceId?.let { pending.remove(it)?.complete(Unit) }
+                        utteranceId?.let { pending.remove(it)?.completeExceptionally(RuntimeException("speak failed")) }
                     }
 
                     override fun onDone(utteranceId: String?) {

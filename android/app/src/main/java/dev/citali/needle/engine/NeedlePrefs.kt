@@ -10,6 +10,8 @@ object NeedlePrefs {
     private const val KEY_PACKS = "tool_packs"
     private const val KEY_TELEGRAM_TOKEN = "telegram_token"
     private const val KEY_TELEGRAM_ENABLED = "telegram_enabled"
+    private const val KEY_TELEGRAM_ADMIN_IDS = "telegram_admin_ids"
+    private const val KEY_A11Y_SETUP = "accessibility_setup_completed"
     private const val KEY_MAX_TOKENS = "max_new_tokens"
     private const val KEY_SHOW_REASONING = "show_reasoning"
     private const val KEY_AGENT_MODE = "agent_mode"
@@ -33,26 +35,116 @@ object NeedlePrefs {
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
-    fun toolPacks(context: Context): Set<PhoneTools.Pack> {
-        val stored = prefs(context).getStringSet(KEY_PACKS, null) ?: return PhoneTools.defaultPacks
-        val packs = stored.mapNotNull { name -> PhoneTools.Pack.entries.firstOrNull { it.name == name } }.toSet()
+    fun toolPacks(context: Context): Set<PhoneTools.Pack> =
+        deserializeToolPacks(prefs(context).getStringSet(KEY_PACKS, null))
+
+    fun setToolPacks(context: Context, packs: Set<PhoneTools.Pack>) {
+        prefs(context).edit().putStringSet(KEY_PACKS, serializeToolPacks(packs)).apply()
+    }
+
+    /**
+     * Pure serialization for the tool-pack selection, so the round-trip is
+     * covered by unit tests. Unknown names (e.g. from a newer app version)
+     * are dropped without resetting the known packs.
+     */
+    fun serializeToolPacks(packs: Set<PhoneTools.Pack>): Set<String> =
+        packs.map { it.name }.toSet()
+
+    fun deserializeToolPacks(stored: Set<String>?): Set<PhoneTools.Pack> {
+        if (stored == null) return PhoneTools.defaultPacks
+        val packs = stored.mapNotNull { name ->
+            PhoneTools.Pack.entries.firstOrNull { it.name == name }
+        }.toSet()
         return packs.ifEmpty { setOf(PhoneTools.Pack.CORE) }
     }
 
-    fun setToolPacks(context: Context, packs: Set<PhoneTools.Pack>) {
-        prefs(context).edit().putStringSet(KEY_PACKS, packs.map { it.name }.toSet()).apply()
-    }
-
-    fun telegramToken(context: Context): String = prefs(context).getString(KEY_TELEGRAM_TOKEN, "").orEmpty()
+    /**
+     * Telegram bot token. The ciphertext lives in [SecureStore] (Android
+     * Keystore); this is the single accessor, so callers never need to know
+     * where the bytes are. A legacy plaintext value is migrated once on read.
+     */
+    fun telegramToken(context: Context): String =
+        dev.citali.needle.pilot.data.SecureStore.getTelegramToken(context)
+            ?: migrateTelegramToken(context)
 
     fun setTelegramToken(context: Context, token: String) {
-        prefs(context).edit().putString(KEY_TELEGRAM_TOKEN, token.trim()).apply()
+        val clean = token.trim()
+        if (clean.isEmpty()) {
+            dev.citali.needle.pilot.data.SecureStore.saveTelegramToken(context, "")
+            prefs(context).edit().remove(KEY_TELEGRAM_TOKEN).apply()
+            return
+        }
+        if (dev.citali.needle.pilot.data.SecureStore.saveTelegramToken(context, clean)) {
+            prefs(context).edit().remove(KEY_TELEGRAM_TOKEN).apply()
+        } else {
+            // Keystore unavailable: keep the token in prefs rather than lose it.
+            prefs(context).edit().putString(KEY_TELEGRAM_TOKEN, clean).apply()
+        }
+    }
+
+    private fun migrateTelegramToken(context: Context): String {
+        val legacy = prefs(context).getString(KEY_TELEGRAM_TOKEN, "").orEmpty().trim()
+        if (legacy.isBlank()) return ""
+        return if (dev.citali.needle.pilot.data.SecureStore.saveTelegramToken(context, legacy)) {
+            prefs(context).edit().remove(KEY_TELEGRAM_TOKEN).apply()
+            legacy
+        } else {
+            legacy
+        }
     }
 
     fun telegramEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_TELEGRAM_ENABLED, false)
 
     fun setTelegramEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_TELEGRAM_ENABLED, enabled).apply()
+    }
+
+    /**
+     * Application-level accessibility setup history: true once the user has
+     * completed the Wahari Accessibility setup. Survives restarts, force-stop
+     * and reboot; cleared only by Clear data / reinstall. This is NOT the
+     * live service state — query [DevicePermissions.isAccessibilityServiceEnabled]
+     * for whether the service is currently enabled.
+     */
+    fun accessibilitySetupCompleted(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_A11Y_SETUP, false)
+
+    fun setAccessibilitySetupCompleted(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_A11Y_SETUP, value).apply()
+    }
+
+    /**
+     * Telegram admin allowlist: the numeric user IDs permitted to drive the
+     * bot. Empty means nobody is authorized yet (secure default) — commands
+     * are refused until at least one ID is saved. Find an ID with /myid.
+     */
+    fun telegramAdminIds(context: Context): Set<Long> =
+        prefs(context).getStringSet(KEY_TELEGRAM_ADMIN_IDS, null)
+            ?.mapNotNull { it.toLongOrNull()?.takeIf { id -> id != 0L } }
+            ?.toSet() ?: emptySet()
+
+    fun setTelegramAdminIds(context: Context, ids: Set<Long>) {
+        val clean = ids.filter { it != 0L }.map { it.toString() }.toSet()
+        prefs(context).edit().putStringSet(KEY_TELEGRAM_ADMIN_IDS, clean).apply()
+    }
+
+    fun isTelegramAdmin(context: Context, userId: Long): Boolean {
+        if (userId == 0L) return false
+        val admins = telegramAdminIds(context)
+        return admins.isNotEmpty() && userId in admins
+    }
+
+    /** Parse the admin-ID field: digits separated by commas, spaces or newlines. */
+    fun parseTelegramAdminIds(raw: String): Pair<Set<Long>, List<String>> {
+        val ids = linkedSetOf<Long>()
+        val invalid = mutableListOf<String>()
+        raw.split(',', ' ', '\n', '\r', '\t', ';').forEach { part ->
+            val token = part.trim()
+            if (token.isEmpty()) return@forEach
+            val id = token.toLongOrNull()?.takeIf { it != 0L }
+            if (id == null) invalid.add(token) else ids.add(id)
+        }
+        return ids to invalid
     }
 
     fun maxNewTokens(context: Context): Int = prefs(context).getInt(KEY_MAX_TOKENS, 512).coerceIn(128, 1024)

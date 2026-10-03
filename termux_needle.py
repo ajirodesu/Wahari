@@ -58,9 +58,9 @@ def text_to_speech(text: str):
     """Speak a text string aloud using the phone's Text-to-Speech (TTS) engine."""
     print(f"-> Calling Tool: text_to_speech(text='{text}')")
     try:
-        res = subprocess.run(["termux-tts-speak"], input=text, capture_output=True, text=True, timeout=10)
+        res = subprocess.run(["termux-tts-speak", str(text)], capture_output=True, text=True, timeout=10)
         if res.returncode != 0:
-            return f"Error: {res.stderr.strip()}"
+            return f"Error: {res.stderr.strip() or res.stdout.strip() or 'TTS failed'}"
         return res.stdout.strip() if res.stdout else "Speech triggered successfully."
     except (FileNotFoundError, PermissionError):
         return f"[Simulated Text-To-Speech] Spoke aloud: '{text}'"
@@ -82,12 +82,18 @@ def get_clipboard():
 @needle.tool
 def vibrate_device(duration_ms: int = 500):
     """Vibrate the phone device for a duration specified in milliseconds."""
+    try:
+        duration_ms = max(0, min(10000, int(duration_ms)))
+    except (TypeError, ValueError):
+        duration_ms = 500
     print(f"-> Calling Tool: vibrate_device(duration_ms={duration_ms})")
     return run_cmd(["termux-vibrate", "-d", str(duration_ms)])
 
 @needle.tool
 def set_torch(on: bool):
     """Turn the phone device's camera flash / torch ON (True) or OFF (False)."""
+    if isinstance(on, str):
+        on = on.strip().lower() in ("true", "1", "yes", "on")
     print(f"-> Calling Tool: set_torch(on={on})")
     state = "on" if on else "off"
     return run_cmd(["termux-torch", state])
@@ -158,7 +164,8 @@ def open_app(app_name: str):
     print(f"-> Calling Tool: open_app(app_name='{app_name}')")
     
     raw = app_name.strip().lower()
-    clean = raw.replace("open", "").replace("the", "").replace("app", "").strip()
+    words = [w for w in raw.split() if w not in ("open", "the", "app", "please")]
+    clean = " ".join(words).strip() or raw
     
     app_urls = {
         "youtube": "https://www.youtube.com",
@@ -215,20 +222,18 @@ def open_app(app_name: str):
                 break
 
     if raw.startswith("http://") or raw.startswith("https://"):
-        run_cmd(["termux-open", raw])
         run_cmd(["termux-open-url", raw])
         return f"Opened URL '{raw}' on phone screen."
 
     if target_key:
         if target_key in app_urls:
             url = app_urls[target_key]
-            run_cmd(["termux-open", url])
             run_cmd(["termux-open-url", url])
             run_cmd(["am", "start", "--user", "0", "-a", "android.intent.action.VIEW", "-d", url])
 
         if target_key in app_packages:
             pkg = app_packages[target_key]
-            run_cmd(["monkey", "-p", pkg, "--user", "0", "-c", "android.intent.category.LAUNCHER", "1"])
+            run_cmd(["monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"])
 
         if target_key in app_activities:
             act = app_activities[target_key]
@@ -236,13 +241,17 @@ def open_app(app_name: str):
 
         return f"Successfully opened {app_name} on your phone screen."
 
-    run_cmd(["termux-open", f"http://google.com"])
-    run_cmd(["monkey", "-p", raw if "." in raw else f"com.{raw}", "--user", "0", "-c", "android.intent.category.LAUNCHER", "1"])
+    run_cmd(["termux-open-url", "http://google.com"])
+    run_cmd(["monkey", "-p", raw if "." in raw else f"com.{raw}", "-c", "android.intent.category.LAUNCHER", "1"])
     return f"Attempted opening '{app_name}' on phone screen."
 
 @needle.tool
 def get_sms_messages(limit: int = 5):
     """Retrieve a list of recent incoming SMS text messages from the phone."""
+    try:
+        limit = max(1, min(100, int(limit)))
+    except (TypeError, ValueError):
+        limit = 5
     print(f"-> Calling Tool: get_sms_messages(limit={limit})")
     res = run_cmd(["termux-sms-list", "-l", str(limit)])
     try:
@@ -263,14 +272,24 @@ def get_contacts():
 @needle.tool
 def download_file(url: str, title: str = "Download"):
     """Download a file from a URL using the system's download manager."""
+    url = (url or "").strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return f"Error: invalid URL '{url}'. Must start with http:// or https://"
     print(f"-> Calling Tool: download_file(url='{url}', title='{title}')")
-    return run_cmd(["termux-download", "-t", title, url])
+    return run_cmd(["termux-download", "-t", str(title or "Download"), url])
 
 @needle.tool
 def set_screen_brightness(level: str):
     """Adjust the screen brightness. Provide a value between 0 (dimmest) and 255 (brightest), or 'auto'."""
     print(f"-> Calling Tool: set_screen_brightness(level='{level}')")
-    return run_cmd(["termux-brightness", str(level)])
+    lvl = str(level).strip().lower()
+    if lvl == "auto":
+        return run_cmd(["termux-brightness", "auto"])
+    try:
+        val = int(float(lvl))
+    except (TypeError, ValueError):
+        return f"Error: brightness level must be 0-255 or 'auto', got '{level}'"
+    return run_cmd(["termux-brightness", str(max(0, min(255, val)))])
 
 @needle.tool
 def get_volume_info():
@@ -285,6 +304,14 @@ def get_volume_info():
 @needle.tool
 def set_volume(stream: str, volume: int):
     """Set the volume level of a specific audio stream (alarm, music, notification, ring, system, call)."""
+    valid = {"alarm", "music", "notification", "ring", "system", "call"}
+    stream = str(stream).strip().lower()
+    if stream not in valid:
+        return f"Error: unknown audio stream '{stream}'. Valid: {sorted(valid)}"
+    try:
+        volume = int(volume)
+    except (TypeError, ValueError):
+        return f"Error: volume must be an integer, got '{volume}'"
     print(f"-> Calling Tool: set_volume(stream='{stream}', volume={volume})")
     return run_cmd(["termux-volume", stream, str(volume)])
 
@@ -298,7 +325,7 @@ def share_content(text: str = "", file_path: str = ""):
         try:
             res = subprocess.run(["termux-share", "-a", "send"], input=text, capture_output=True, text=True, timeout=10)
             if res.returncode != 0:
-                return f"Error: {res.stderr.strip()}"
+                return f"Error: {res.stderr.strip() or res.stdout.strip() or 'TTS failed'}"
             return res.stdout.strip() if res.stdout else "Content shared successfully."
         except Exception as e:
             return f"Error sharing text: {str(e)}"
@@ -308,6 +335,10 @@ def share_content(text: str = "", file_path: str = ""):
 @needle.tool
 def get_call_log(limit: int = 5):
     """Retrieve the recent call log history from the phone."""
+    try:
+        limit = max(1, min(100, int(limit)))
+    except (TypeError, ValueError):
+        limit = 5
     print(f"-> Calling Tool: get_call_log(limit={limit})")
     res = run_cmd(["termux-call-log", "-l", str(limit)])
     try:

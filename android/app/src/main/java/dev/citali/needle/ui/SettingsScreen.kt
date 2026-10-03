@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Smartphone
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.citali.needle.engine.ChatController
 import dev.citali.needle.engine.ModelDownloadController
@@ -59,6 +64,7 @@ import dev.citali.needle.pilot.data.SecureStore
 import dev.citali.needle.pilot.data.SettingsStore
 import dev.citali.needle.remote.NeedleRemoteService
 import dev.citali.needle.remote.TelegramBridge
+import dev.citali.needle.tools.AccessibilityState
 import dev.citali.needle.tools.ActivityBridges
 import dev.citali.needle.tools.DevicePermissions
 import dev.citali.needle.tools.PhoneTools
@@ -92,12 +98,45 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     var showReasoning by remember { mutableStateOf(NeedlePrefs.showReasoning(context)) }
     var telegramToken by remember { mutableStateOf(NeedlePrefs.telegramToken(context)) }
     var telegramEnabled by remember { mutableStateOf(NeedlePrefs.telegramEnabled(context)) }
+    var adminIdsInput by remember {
+        mutableStateOf(NeedlePrefs.telegramAdminIds(context).sorted().joinToString(", "))
+    }
+    var adminIdsError by remember { mutableStateOf<String?>(null) }
     var endpointUrl by remember { mutableStateOf(settings.endpointUrl) }
     var apiPath by remember { mutableStateOf(settings.apiPath) }
     var model by remember { mutableStateOf(settings.model) }
     var fallbacks by remember { mutableStateOf(settings.fallbackModels.joinToString("\n")) }
     var apiKeyInput by remember { mutableStateOf("") }
     var hasApiKey by remember { mutableStateOf(false) }
+    // Live accessibility service state (OS truth, re-queried on resume) plus
+    // durable setup history. Disabling the service later shows as disabled
+    // without erasing the historical completion.
+    var a11yServiceOn by remember {
+        mutableStateOf(DevicePermissions.isAccessibilityServiceEnabled(context))
+    }
+    var a11ySetupDone by remember {
+        mutableStateOf(NeedlePrefs.accessibilitySetupCompleted(context))
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val on = DevicePermissions.isAccessibilityServiceEnabled(context)
+                a11yServiceOn = on
+                if (on && !NeedlePrefs.accessibilitySetupCompleted(context)) {
+                    NeedlePrefs.setAccessibilitySetupCompleted(context, true)
+                }
+                a11ySetupDone = NeedlePrefs.accessibilitySetupCompleted(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // Drafts are editing values; the DataStore flow is the saved truth. Sync
+    // drafts from the store until the user edits, so saved values loaded
+    // asynchronously after first composition are shown instead of defaults —
+    // and defaults never overwrite what is stored.
+    var providerTouched by remember { mutableStateOf(false) }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) ModelDownloadController.import(context, uri)
@@ -107,9 +146,13 @@ fun SettingsContent(modifier: Modifier = Modifier) {
         hasApiKey = withContext(Dispatchers.IO) { SecureStore.hasApiKey(context) }
         NeedleEngine.refresh(context)
     }
-    LaunchedEffect(settings.endpointUrl, settings.model) {
-        if (endpointUrl.isBlank()) endpointUrl = settings.endpointUrl
-        if (model.isBlank()) model = settings.model
+    LaunchedEffect(settings) {
+        if (!providerTouched) {
+            endpointUrl = settings.endpointUrl
+            apiPath = settings.apiPath
+            model = settings.model
+            fallbacks = settings.fallbackModels.joinToString("\n")
+        }
     }
 
     PageColumn {
@@ -184,49 +227,62 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             )
         }
 
-        Section(
-            title = "Remote control",
-            subtitle = "Text the phone through a Telegram bot. Messages run the same on-device model.",
-        ) {
-            WahariTextField(
-                value = telegramToken,
-                onValueChange = { telegramToken = it },
-                label = "Bot token from @BotFather",
-                singleLine = true,
-            )
-            ActionRow {
-                SecondaryButton(
-                    text = "Save token",
-                    enabled = telegramToken.isNotBlank(),
-                    onClick = {
+        RemoteControlCard(
+            token = telegramToken,
+            onTokenChange = { telegramToken = it },
+            adminIdsInput = adminIdsInput,
+            onAdminIdsChange = {
+                adminIdsInput = it
+                adminIdsError = null
+            },
+            adminIdsError = adminIdsError,
+            running = telegram.running,
+            handled = telegram.handled,
+            denied = telegram.denied,
+            lastDeniedUser = telegram.lastDeniedUser,
+            lastMessage = telegram.lastMessage,
+            listenerError = telegram.error,
+            enabled = telegramEnabled,
+            onSave = {
+                val (ids, invalid) = NeedlePrefs.parseTelegramAdminIds(adminIdsInput)
+                if (invalid.isNotEmpty()) {
+                    adminIdsError = "These do not look like numeric user IDs: ${invalid.take(3).joinToString(", ")}"
+                } else if (ids.isEmpty()) {
+                    adminIdsError = "Save at least one numeric user ID — send /myid to the bot to see yours."
+                } else {
+                    adminIdsError = null
+                    NeedlePrefs.setTelegramToken(context, telegramToken)
+                    NeedlePrefs.setTelegramAdminIds(context, ids)
+                    adminIdsInput = ids.sorted().joinToString(", ")
+                    ChatController.addSystem("Remote access saved for ${ids.size} admin${if (ids.size == 1) "" else "s"}.")
+                }
+            },
+            onToggle = {
+                val (ids, invalid) = NeedlePrefs.parseTelegramAdminIds(adminIdsInput)
+                if (!telegramEnabled) {
+                    if (telegramToken.isBlank()) {
+                        adminIdsError = "Paste the bot token from @BotFather first."
+                    } else if (invalid.isNotEmpty()) {
+                        adminIdsError = "These do not look like numeric user IDs: ${invalid.take(3).joinToString(", ")}"
+                    } else if (ids.isEmpty()) {
+                        adminIdsError = "Save at least one numeric user ID — send /myid to the bot to see yours."
+                    } else {
+                        adminIdsError = null
                         NeedlePrefs.setTelegramToken(context, telegramToken)
-                        ChatController.addSystem("Telegram token saved.")
-                    },
-                )
-                PrimaryButton(
-                    text = if (telegramEnabled) "Turn off" else "Turn on",
-                    enabled = telegramToken.isNotBlank() || NeedlePrefs.telegramToken(context).isNotBlank(),
-                    onClick = {
-                        val enable = !telegramEnabled
-                        NeedlePrefs.setTelegramEnabled(context, enable)
-                        telegramEnabled = enable
-                        NeedlePrefs.setTelegramToken(context, telegramToken)
-                        if (enable) {
-                            NeedleRemoteService.start(context, telegramToken)
-                        } else {
-                            NeedleRemoteService.stop(context)
-                            TelegramBridge.stop()
-                        }
-                    },
-                )
-            }
-            KeyValue("Listener", if (telegram.running) "running" else "stopped")
-            telegram.handled.takeIf { it > 0 }?.let { KeyValue("Commands handled", it.toString()) }
-            telegram.lastMessage?.let { MonoBlock("last: $it") }
-            telegram.error?.let {
-                Text(it, style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.danger))
-            }
-        }
+                        NeedlePrefs.setTelegramAdminIds(context, ids)
+                        adminIdsInput = ids.sorted().joinToString(", ")
+                        NeedlePrefs.setTelegramEnabled(context, true)
+                        telegramEnabled = true
+                        NeedleRemoteService.start(context, telegramToken)
+                    }
+                } else {
+                    NeedlePrefs.setTelegramEnabled(context, false)
+                    telegramEnabled = false
+                    NeedleRemoteService.stop(context)
+                    TelegramBridge.stop()
+                }
+            },
+        )
 
         Section(
             title = "Automation",
@@ -278,6 +334,25 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                     onClick = { DevicePermissions.openAppSettings(context) },
                 )
             }
+            val a11yState = AccessibilityState.resolve(a11ySetupDone, a11yServiceOn)
+            KeyValue(
+                "Screen automation",
+                when (a11yState) {
+                    AccessibilityState.UiState.READY -> "Enabled and available"
+                    AccessibilityState.UiState.DISABLED_AFTER_SETUP -> "Completed before · currently disabled"
+                    AccessibilityState.UiState.NEVER_CONFIGURED -> "Not configured"
+                },
+            )
+            if (a11yState != AccessibilityState.UiState.READY) {
+                Text(
+                    if (a11yState == AccessibilityState.UiState.DISABLED_AFTER_SETUP) {
+                        "The service is currently off. Re-enable it above — your setup progress is kept."
+                    } else {
+                        "Enable the service above to use screen automation."
+                    },
+                    style = WahariTypography.sectionSubtitle,
+                )
+            }
             if (history.isNotEmpty()) {
                 Text("Recent tasks", style = WahariTypography.optionTitle.copy(fontSize = 14.spFix()))
                 Text("Only the command text and its outcome are stored.", style = WahariTypography.sectionSubtitle)
@@ -310,25 +385,25 @@ fun SettingsContent(modifier: Modifier = Modifier) {
         ) {
             WahariTextField(
                 value = endpointUrl,
-                onValueChange = { endpointUrl = it },
+                onValueChange = { endpointUrl = it; providerTouched = true },
                 label = "Base URL",
                 singleLine = true,
             )
             WahariTextField(
                 value = apiPath,
-                onValueChange = { apiPath = it },
+                onValueChange = { apiPath = it; providerTouched = true },
                 label = "Chat path",
                 singleLine = true,
             )
             WahariTextField(
                 value = model,
-                onValueChange = { model = it },
+                onValueChange = { model = it; providerTouched = true },
                 label = "Model",
                 singleLine = true,
             )
             WahariTextField(
                 value = fallbacks,
-                onValueChange = { fallbacks = it },
+                onValueChange = { fallbacks = it; providerTouched = true },
                 label = "Fallback models (one per line)",
                 maxLines = 3,
             )
@@ -358,6 +433,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                             } else {
                                 ChatController.addSystem("Provider settings saved.")
                             }
+                            providerTouched = false
                         }
                     },
                 )
@@ -368,6 +444,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                         scope.launch {
                             withContext(Dispatchers.IO) { SecureStore.clearApiKey(context) }
                             hasApiKey = false
+                            providerTouched = false
                             ChatController.addSystem("Stored API key removed.")
                         }
                     },
@@ -403,6 +480,283 @@ fun SettingsContent(modifier: Modifier = Modifier) {
 }
 
 private fun Int.spFix() = androidx.compose.ui.unit.TextUnit(this.toFloat(), androidx.compose.ui.unit.TextUnitType.Sp)
+
+/** Premium remote-control card: token + admin user IDs, access status and listener health. */
+@Composable
+private fun RemoteControlCard(
+    token: String,
+    onTokenChange: (String) -> Unit,
+    adminIdsInput: String,
+    onAdminIdsChange: (String) -> Unit,
+    adminIdsError: String?,
+    running: Boolean,
+    handled: Int,
+    denied: Int,
+    lastDeniedUser: Long?,
+    lastMessage: String?,
+    listenerError: String?,
+    enabled: Boolean,
+    onSave: () -> Unit,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val cardShape = RoundedCornerShape(28.dp)
+    val innerShape = RoundedCornerShape(18.dp)
+    val (parsedIds, _) = remember(adminIdsInput) {
+        NeedlePrefs.parseTelegramAdminIds(adminIdsInput)
+    }
+    val secured = parsedIds.isNotEmpty()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF1A2230), Color(0xFF141417), Color(0xFF101012)),
+                ),
+            )
+            .border(1.dp, Color(0x2BFFFFFF), cardShape)
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Eyebrow + status pills
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                "REMOTE CONTROL",
+                style = WahariTypography.optionTag.copy(
+                    color = WahariTokens.textMuted,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = androidx.compose.ui.unit.TextUnit(1.6f, androidx.compose.ui.unit.TextUnitType.Sp),
+                ),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusPill(
+                    text = if (running) "RUNNING" else "STOPPED",
+                    active = running,
+                )
+                StatusPill(
+                    text = if (secured) "RESTRICTED" else "NOT SECURED",
+                    active = secured,
+                )
+            }
+        }
+
+        // Header: shield mark + title + toggle affordance
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFF2B9BF0), Color(0xFF155A9C)),
+                        ),
+                    )
+                    .border(1.dp, Color(0x66FFFFFF), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Send,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "Telegram access",
+                    style = WahariTypography.sheetTitle.copy(fontSize = androidx.compose.ui.unit.TextUnit(19f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                )
+                Text(
+                    if (secured) {
+                        "Only ${parsedIds.size} admin${if (parsedIds.size == 1) "" else "s"} can run commands."
+                    } else {
+                        "Add your user ID to lock the bot to you."
+                    },
+                    style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.textSecondary),
+                )
+            }
+        }
+
+        Text(
+            "Text the phone through a Telegram bot. Messages run the same on-device model — every sender ID is checked against your allowlist before anything runs.",
+            style = WahariTypography.assistantBullet.copy(
+                color = WahariTokens.textSecondary,
+                lineHeight = androidx.compose.ui.unit.TextUnit(21f, androidx.compose.ui.unit.TextUnitType.Sp),
+            ),
+        )
+
+        // Token + user ID fields side by side
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            WahariTextField(
+                value = token,
+                onValueChange = onTokenChange,
+                label = "Bot token from @BotFather",
+                placeholder = "123456:ABC-DEF…",
+                singleLine = true,
+                modifier = Modifier.weight(1.6f),
+            )
+            WahariTextField(
+                value = adminIdsInput,
+                onValueChange = onAdminIdsChange,
+                label = "Admin user IDs",
+                placeholder = "123456789",
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            "Send /myid to the bot to see a numeric ID. Separate several IDs with commas.",
+            style = WahariTypography.optionTag,
+        )
+        adminIdsError?.let {
+            Text(it, style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.danger))
+        }
+
+        ActionRow {
+            PrimaryButton(text = "Save access", onClick = onSave)
+            SecondaryButton(text = if (enabled) "Turn off" else "Turn on", onClick = onToggle)
+        }
+
+        // Listener health panel
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(innerShape)
+                .background(Color.Black.copy(alpha = 0.32f))
+                .border(1.dp, Color(0x1AFFFFFF), innerShape)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+        ) {
+            RemoteMetaRow(label = "Listener", value = if (running) "Running" else "Stopped")
+            AboutDivider()
+            RemoteMetaRow(
+                label = "Access",
+                value = if (secured) {
+                    "Restricted to ${parsedIds.size} admin${if (parsedIds.size == 1) "" else "s"}"
+                } else {
+                    "Locked — save an ID"
+                },
+            )
+            if (handled > 0) {
+                AboutDivider()
+                RemoteMetaRow(label = "Commands handled", value = handled.toString())
+            }
+            if (denied > 0) {
+                AboutDivider()
+                RemoteMetaRow(
+                    label = "Blocked senders",
+                    value = denied.toString() + (lastDeniedUser?.let { " · last $it" } ?: ""),
+                )
+            }
+        }
+        lastMessage?.let { MonoBlock("last: $it") }
+        listenerError?.let {
+            Text(it, style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.danger))
+        }
+
+        // Security promise
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(innerShape)
+                .background(Color(0x141D88E5))
+                .border(1.dp, Color(0x2E1D88E5), innerShape)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x221D88E5)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Shield,
+                    contentDescription = null,
+                    tint = Color(0xFF7AB8FF),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp), modifier = Modifier.weight(1f)) {
+                Text(
+                    "Allowlist enforced on-device",
+                    style = WahariTypography.assistantBullet.copy(
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = androidx.compose.ui.unit.TextUnit(13.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    ),
+                )
+                Text(
+                    "Unknown senders get a refusal and never reach the model.",
+                    style = WahariTypography.sectionSubtitle.copy(color = Color(0xFFA9C7E8)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusPill(text: String, active: Boolean) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (active) Color(0x224ADE80) else Color(0x228E8E96))
+            .border(
+                1.dp,
+                if (active) Color(0x554ADE80) else Color(0x338E8E96),
+                CircleShape,
+            )
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text,
+            style = WahariTypography.optionTag.copy(
+                color = if (active) Color(0xFF86EFAC) else WahariTokens.textSecondary,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = androidx.compose.ui.unit.TextUnit(10.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+            ),
+        )
+    }
+}
+
+@Composable
+private fun RemoteMetaRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            label,
+            style = WahariTypography.sectionSubtitle.copy(color = WahariTokens.textMuted),
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            value,
+            style = WahariTypography.assistantBullet.copy(
+                color = WahariTokens.textPrimary,
+                fontWeight = FontWeight.Medium,
+                fontSize = androidx.compose.ui.unit.TextUnit(13.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+            ),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+        )
+    }
+}
 
 /** Premium About card: brand header, spec sheet, privacy promise and provenance. */
 @Composable

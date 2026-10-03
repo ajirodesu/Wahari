@@ -13,9 +13,16 @@ if os.path.exists(TERMUX_BIN_PATH) and TERMUX_BIN_PATH not in os.environ.get("PA
 import json
 import subprocess
 import shutil
-import needle
+import html as _html
 import threading
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, send_file
+
+try:
+    import needle
+    _NEEDLE_IMPORT_ERROR = None
+except ImportError as _e:
+    needle = None
+    _NEEDLE_IMPORT_ERROR = str(_e)
 
 # Try to import telebot for remote Telegram Bot control
 try:
@@ -31,8 +38,17 @@ except ImportError:
 
 # Create Flask app
 app = Flask(__name__)
+# Limit request payloads to 1 MB to avoid abuse / OOM.
+app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
 
 IS_TERMUX = os.path.exists("/data/data/com.termux")
+
+def _identity_decorator(f):
+    return f
+
+# Use real @needle_tool when available, else a no-op so the Flask app
+# still imports and the simulation layer keeps working.
+needle_tool = needle.tool if needle is not None else _identity_decorator
 
 def run_cmd(args):
     # Try running the actual termux command first with 15s timeout for hardware warm-up
@@ -143,11 +159,15 @@ def run_cmd(args):
             return f"[Simulated Share] Shared content via system share sheet: '{file_arg}'"
         elif cmd == "termux-call-log":
             limit = args[2] if len(args) > 2 else "5"
+            try:
+                n = max(1, int(limit))
+            except (TypeError, ValueError):
+                n = 3
             return json.dumps([
                 {"name": "Alice Smith", "number": "+1987654321", "duration": "2m 14s", "date": "2026-08-31 10:15:22", "type": "incoming"},
                 {"name": "John Doe", "number": "+14155552671", "duration": "0s", "date": "2026-08-30 18:44:10", "type": "missed"},
                 {"name": "Bob Jones", "number": "+15550199", "duration": "5m 45s", "date": "2026-08-30 14:02:01", "type": "outgoing"}
-            ][:int(limit) if limit.isdigit() else None])
+            ][:n])
         elif cmd == "termux-fingerprint":
             return json.dumps({"auth_result": "AUTH_SUCCESS", "errors": None})
         elif cmd == "termux-microphone-record":
@@ -192,19 +212,19 @@ def run_cmd(args):
 # The model stays Cactus Compute's Needle 3; the app is Wahari by AjiroDesu.
 # ----------------------------------------------------------------------
 
-@needle.tool
+@needle_tool
 def show_toast(message: str):
     """Display a brief toast notification popup on the phone screen."""
     print(f"[Agent Triggered Tool] show_toast(message='{message}')")
     return run_cmd(["termux-toast", message])
 
-@needle.tool
+@needle_tool
 def show_notification(title: str, content: str):
     """Display a system notification drawer popup with a title and message content."""
     print(f"[Agent Triggered Tool] show_notification(title='{title}', content='{content}')")
     return run_cmd(["termux-notification", "--title", title, "--content", content])
 
-@needle.tool
+@needle_tool
 def get_battery_status():
     """Retrieve details about the phone's battery (percentage, status, health, temperature)."""
     print("[Agent Triggered Tool] get_battery_status()")
@@ -214,68 +234,83 @@ def get_battery_status():
     except Exception:
         return res
 
-@needle.tool
+@needle_tool
 def text_to_speech(text: str):
     """Speak a text string aloud using the phone's Text-to-Speech (TTS) engine."""
     print(f"[Agent Triggered Tool] text_to_speech(text='{text}')")
     try:
-        res = subprocess.run(["termux-tts-speak"], input=text, capture_output=True, text=True, timeout=10)
+        res = subprocess.run(["termux-tts-speak", str(text)], capture_output=True, text=True, timeout=10)
         if res.returncode != 0:
-            return f"Error: {res.stderr.strip()}"
+            return f"Error: {res.stderr.strip() or res.stdout.strip() or 'TTS failed'}"
         return res.stdout.strip() if res.stdout else "Speech triggered successfully."
     except (FileNotFoundError, PermissionError):
         return f"[Simulated Text-To-Speech] Spoke aloud: '{text}'"
     except Exception as e:
         return f"Error: {str(e)}"
 
-@needle.tool
+@needle_tool
 def set_clipboard(text: str):
     """Copy a text string to the device's system clipboard."""
     print(f"[Agent Triggered Tool] set_clipboard(text='{text}')")
     return run_cmd(["termux-clipboard-set", text])
 
-@needle.tool
+@needle_tool
 def get_clipboard():
     """Retrieve the current text stored in the device's system clipboard."""
     print("[Agent Triggered Tool] get_clipboard()")
     return run_cmd(["termux-clipboard-get"])
 
-@needle.tool
+@needle_tool
 def vibrate_device(duration_ms: int = 500):
     """Vibrate the phone device for a duration specified in milliseconds."""
+    try:
+        duration_ms = int(duration_ms)
+    except (TypeError, ValueError):
+        duration_ms = 500
+    duration_ms = max(0, min(10000, duration_ms))
     print(f"[Agent Triggered Tool] vibrate_device(duration_ms={duration_ms})")
     return run_cmd(["termux-vibrate", "-d", str(duration_ms)])
 
-@needle.tool
+@needle_tool
 def set_torch(on: bool):
     """Turn the phone device's camera flash / torch ON (True) or OFF (False)."""
+    if isinstance(on, str):
+        on = on.strip().lower() in ("true", "1", "yes", "on")
     print(f"[Agent Triggered Tool] set_torch(on={on})")
     state = "on" if on else "off"
     return run_cmd(["termux-torch", state])
 
-@needle.tool
+@needle_tool
 def get_location():
     """Retrieve the device's current GPS location coordinates (latitude, longitude, altitude)."""
     print("[Agent Triggered Tool] get_location()")
     res = run_cmd(["termux-location", "-p", "network", "-r", "last"])
     try:
-        return json.loads(res)
+        parsed = json.loads(res)
+        # Some devices return {} when there is no cached fix — retry once.
+        if isinstance(parsed, dict) and "latitude" not in parsed and IS_TERMUX:
+            retry = run_cmd(["termux-location", "-p", "network", "-r", "once"])
+            try:
+                return json.loads(retry)
+            except Exception:
+                return retry
+        return parsed
     except Exception:
         return res
 
-@needle.tool
+@needle_tool
 def send_sms(recipient: str, message: str):
     """Send an SMS text message to a recipient phone number."""
     print(f"[Agent Triggered Tool] send_sms(recipient='{recipient}', message='{message}')")
     return run_cmd(["termux-sms-send", "-n", recipient, message])
 
-@needle.tool
+@needle_tool
 def make_phone_call(phone_number: str):
     """Initiate an outgoing voice call to the specified phone number."""
     print(f"[Agent Triggered Tool] make_phone_call(phone_number='{phone_number}')")
     return run_cmd(["termux-telephony-call", phone_number])
 
-@needle.tool
+@needle_tool
 def get_wifi_info():
     """Retrieve details about the active Wi-Fi connection (SSID, IP address, speed, strength)."""
     print("[Agent Triggered Tool] get_wifi_info()")
@@ -286,40 +321,49 @@ def get_wifi_info():
         return res
 
 
-@needle.tool
+@needle_tool
 def take_camera_photo():
     """Capture a photo using the phone's back camera and save it directly to the Download folder."""
     print("[Agent Triggered Tool] take_camera_photo()")
     home_dir = os.path.expanduser("~")
-    
+
     possible_targets = [
         "/sdcard/Download/wahari_photo.jpg",
         os.path.join(home_dir, "storage", "downloads", "wahari_photo.jpg"),
         os.path.join(home_dir, "wahari_photo.jpg")
     ]
-    
+
     last_res = ""
     for target_path in possible_targets:
         try:
-            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            parent = os.path.dirname(target_path)
+            if parent and IS_TERMUX:
+                os.makedirs(parent, exist_ok=True)
             res = run_cmd(["termux-camera-photo", "-c", "0", target_path])
             last_res = res
-            
+
+            # On desktop (no Termux) run_cmd only simulates — no file is
+            # created, so return the simulated success immediately.
+            if not IS_TERMUX:
+                return f"Photo captured with back camera and saved to: '{target_path}' ({res})"
+
             # Verify photo file actually exists and is non-empty
             if os.path.exists(target_path) and os.path.getsize(target_path) > 0:
                 return f"Photo captured with back camera and saved to: '{target_path}'"
         except Exception as e:
             last_res = str(e)
-            
+
     return f"Camera capture failed ({last_res}). Tip: Ensure 'Termux:API' app has 'Camera' and 'Files/Storage' permissions enabled in Android Settings."
 
-@needle.tool
+@needle_tool
 def open_app(app_name: str):
     """Open an application on the phone screen (e.g. 'whatsapp', 'youtube', 'chrome', 'instagram', 'spotify', 'telegram', 'facebook', 'twitter', 'gmail', 'maps', 'calculator', 'settings')."""
     print(f"[Agent Triggered Tool] open_app(app_name='{app_name}')")
-    
+
     raw = app_name.strip().lower()
-    clean = raw.replace("open", "").replace("the", "").replace("app", "").strip()
+    # Strip only whole filler words, not substrings inside names.
+    words = [w for w in raw.split() if w not in ("open", "the", "app", "please")]
+    clean = " ".join(words).strip() or raw
     
     app_urls = {
         "youtube": "https://www.youtube.com",
@@ -376,20 +420,18 @@ def open_app(app_name: str):
                 break
 
     if raw.startswith("http://") or raw.startswith("https://"):
-        run_cmd(["termux-open", raw])
         run_cmd(["termux-open-url", raw])
         return f"Opened URL '{raw}' on phone screen."
 
     if target_key:
         if target_key in app_urls:
             url = app_urls[target_key]
-            run_cmd(["termux-open", url])
             run_cmd(["termux-open-url", url])
             run_cmd(["am", "start", "--user", "0", "-a", "android.intent.action.VIEW", "-d", url])
 
         if target_key in app_packages:
             pkg = app_packages[target_key]
-            run_cmd(["monkey", "-p", pkg, "--user", "0", "-c", "android.intent.category.LAUNCHER", "1"])
+            run_cmd(["monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"])
 
         if target_key in app_activities:
             act = app_activities[target_key]
@@ -397,13 +439,18 @@ def open_app(app_name: str):
 
         return f"Successfully opened {app_name} on your phone screen."
 
-    run_cmd(["termux-open", f"http://google.com"])
-    run_cmd(["monkey", "-p", raw if "." in raw else f"com.{raw}", "--user", "0", "-c", "android.intent.category.LAUNCHER", "1"])
+    run_cmd(["termux-open-url", "http://google.com"])
+    run_cmd(["monkey", "-p", raw if "." in raw else f"com.{raw}", "-c", "android.intent.category.LAUNCHER", "1"])
     return f"Attempted opening '{app_name}' on phone screen."
 
-@needle.tool
+@needle_tool
 def get_sms_messages(limit: int = 5):
     """Retrieve a list of recent incoming SMS text messages from the phone."""
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 5
+    limit = max(1, min(100, limit))
     print(f"[Agent Triggered Tool] get_sms_messages(limit={limit})")
     res = run_cmd(["termux-sms-list", "-l", str(limit)])
     try:
@@ -411,7 +458,7 @@ def get_sms_messages(limit: int = 5):
     except Exception:
         return res
 
-@needle.tool
+@needle_tool
 def get_contacts():
     """Retrieve the phone's contact list (names and phone numbers)."""
     print("[Agent Triggered Tool] get_contacts()")
@@ -421,19 +468,30 @@ def get_contacts():
     except Exception:
         return res
 
-@needle.tool
+@needle_tool
 def download_file(url: str, title: str = "Download"):
     """Download a file from a URL using the system's download manager."""
+    url = (url or "").strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return f"Error: invalid URL '{url}'. Must start with http:// or https://"
     print(f"[Agent Triggered Tool] download_file(url='{url}', title='{title}')")
-    return run_cmd(["termux-download", "-t", title, url])
+    return run_cmd(["termux-download", "-t", str(title or "Download"), url])
 
-@needle.tool
+@needle_tool
 def set_screen_brightness(level: str):
     """Adjust the screen brightness. Provide a value between 0 (dimmest) and 255 (brightest), or 'auto'."""
     print(f"[Agent Triggered Tool] set_screen_brightness(level='{level}')")
-    return run_cmd(["termux-brightness", str(level)])
+    lvl = str(level).strip().lower()
+    if lvl == "auto":
+        return run_cmd(["termux-brightness", "auto"])
+    try:
+        val = int(float(lvl))
+    except (TypeError, ValueError):
+        return f"Error: brightness level must be 0-255 or 'auto', got '{level}'"
+    val = max(0, min(255, val))
+    return run_cmd(["termux-brightness", str(val)])
 
-@needle.tool
+@needle_tool
 def get_volume_info():
     """Retrieve the current volume levels of all audio streams (music, ring, alarm, etc.)."""
     print("[Agent Triggered Tool] get_volume_info()")
@@ -443,13 +501,21 @@ def get_volume_info():
     except Exception:
         return res
 
-@needle.tool
+@needle_tool
 def set_volume(stream: str, volume: int):
     """Set the volume level of a specific audio stream (alarm, music, notification, ring, system, call)."""
+    valid = {"alarm", "music", "notification", "ring", "system", "call"}
+    stream = str(stream).strip().lower()
+    if stream not in valid:
+        return f"Error: unknown audio stream '{stream}'. Valid: {sorted(valid)}"
+    try:
+        volume = int(volume)
+    except (TypeError, ValueError):
+        return f"Error: volume must be an integer, got '{volume}'"
     print(f"[Agent Triggered Tool] set_volume(stream='{stream}', volume={volume})")
     return run_cmd(["termux-volume", stream, str(volume)])
 
-@needle.tool
+@needle_tool
 def share_content(text: str = "", file_path: str = ""):
     """Share text content or a file using the Android system share sheet."""
     print(f"[Agent Triggered Tool] share_content(text='{text}', file_path='{file_path}')")
@@ -459,16 +525,25 @@ def share_content(text: str = "", file_path: str = ""):
         try:
             res = subprocess.run(["termux-share", "-a", "send"], input=text, capture_output=True, text=True, timeout=10)
             if res.returncode != 0:
-                return f"Error: {res.stderr.strip()}"
+                if not IS_TERMUX:
+                    return f"[Simulated Share] Shared content via system share sheet: '{text}'"
+                return f"Error: {res.stderr.strip() or res.stdout.strip() or 'share failed'}"
             return res.stdout.strip() if res.stdout else "Content shared successfully."
+        except (FileNotFoundError, PermissionError):
+            return f"[Simulated Share] Shared content via system share sheet: '{text}'"
         except Exception as e:
             return f"Error sharing text: {str(e)}"
     else:
         return "Error: Either text or file_path must be provided."
 
-@needle.tool
+@needle_tool
 def get_call_log(limit: int = 5):
     """Retrieve the recent call log history from the phone."""
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 5
+    limit = max(1, min(100, limit))
     print(f"[Agent Triggered Tool] get_call_log(limit={limit})")
     res = run_cmd(["termux-call-log", "-l", str(limit)])
     try:
@@ -476,7 +551,7 @@ def get_call_log(limit: int = 5):
     except Exception:
         return res
 
-@needle.tool
+@needle_tool
 def authenticate_fingerprint():
     """Prompt for fingerprint authentication on the device to verify user identity."""
     print("[Agent Triggered Tool] authenticate_fingerprint()")
@@ -486,7 +561,7 @@ def authenticate_fingerprint():
     except Exception:
         return res
 
-@needle.tool
+@needle_tool
 def record_audio_start(file_path: str = "recording.3gp", limit_seconds: int = 0):
     """Begin recording audio from the device microphone to a specified file. Optionally set a duration limit in seconds."""
     print(f"[Agent Triggered Tool] record_audio_start(file_path='{file_path}', limit_seconds={limit_seconds})")
@@ -495,13 +570,13 @@ def record_audio_start(file_path: str = "recording.3gp", limit_seconds: int = 0)
         cmd.extend(["-l", str(limit_seconds)])
     return run_cmd(cmd)
 
-@needle.tool
+@needle_tool
 def record_audio_stop():
     """Stop the ongoing microphone audio recording and save the file."""
     print("[Agent Triggered Tool] record_audio_stop()")
     return run_cmd(["termux-microphone-record", "-q"])
 
-@needle.tool
+@needle_tool
 def get_telephony_info():
     """Retrieve device telephony information (network operator, SIM state, network type, IMEI/device ID)."""
     print("[Agent Triggered Tool] get_telephony_info()")
@@ -511,7 +586,7 @@ def get_telephony_info():
     except Exception:
         return res
 
-@needle.tool
+@needle_tool
 def scan_wifi_networks():
     """Scan and retrieve a list of nearby Wi-Fi networks and their signal strengths."""
     print("[Agent Triggered Tool] scan_wifi_networks()")
@@ -524,12 +599,14 @@ def scan_wifi_networks():
 
 # ----------------------------------------------------------------------
 # Initialize the Wahari agent (powered by Cactus Compute's Needle 3 model)
+# Lazy init so importing the Flask app never crashes when the model or
+# the `needle` package is missing (desktop dev, CI, offline first run).
 # ----------------------------------------------------------------------
 print("Loading local Needle 3 model (34mb)...")
 tools_list = [
-    show_toast, show_notification, get_battery_status, 
-    text_to_speech, set_clipboard, get_clipboard, 
-    vibrate_device, set_torch, get_location, 
+    show_toast, show_notification, get_battery_status,
+    text_to_speech, set_clipboard, get_clipboard,
+    vibrate_device, set_torch, get_location,
     send_sms, make_phone_call, get_wifi_info,
     take_camera_photo, get_sms_messages, get_contacts, download_file,
     set_screen_brightness, get_volume_info, set_volume, share_content,
@@ -537,8 +614,29 @@ tools_list = [
     record_audio_stop, get_telephony_info, scan_wifi_networks,
     open_app
 ]
-agent = needle.Needle(tools=tools_list)
-print("Wahari active and ready! (Needle 3 model)")
+agent = None
+_agent_init_error = _NEEDLE_IMPORT_ERROR
+
+def get_agent():
+    """Lazily build the Needle agent on first use. Returns None on failure."""
+    global agent, _agent_init_error
+    if agent is not None:
+        return agent
+    if needle is None:
+        print(f"Wahari running WITHOUT Needle model (import failed: {_agent_init_error}). "
+              "Tool simulation endpoints still work.", file=sys.stderr)
+        return None
+    try:
+        agent = needle.Needle(tools=tools_list)
+        print("Wahari active and ready! (Needle 3 model)")
+    except Exception as e:
+        _agent_init_error = str(e)
+        print(f"Wahari running WITHOUT Needle model: {e}", file=sys.stderr)
+        agent = None
+    return agent
+
+# Try eager init for the normal case, but never let it kill the server.
+get_agent()
 
 
 # ----------------------------------------------------------------------
@@ -877,6 +975,14 @@ HTML_TEMPLATE = """
 
         .tool-icon {
             margin-right: 0.4rem;
+            display: inline-flex;
+            vertical-align: -2px;
+            color: #a5b4fc;
+        }
+
+        .tool-icon svg {
+            width: 14px;
+            height: 14px;
         }
 
         .tool-result-item ul {
@@ -1254,59 +1360,124 @@ HTML_TEMPLATE = """
             const row = document.createElement('div');
             row.className = 'log-row';
             const time = new Date().toLocaleTimeString();
-            row.innerHTML = `<span class="log-time-prefix">[${time}][${tag}]</span> ${message}`;
+            const t = document.createElement('span');
+            t.className = 'log-time-prefix';
+            t.textContent = `[${time}][${tag}]`;
+            row.appendChild(t);
+            row.appendChild(document.createTextNode(' ' + String(message)));
             terminalLogs.appendChild(row);
             terminalLogs.scrollTop = terminalLogs.scrollHeight;
         }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Lucide SVG icons (inline, stroke=currentColor, no emoji anywhere)
+        function lucide(paths) {
+            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+        }
+        const ICONS = {
+            zap: lucide('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
+            battery: lucide('<rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/><line x1="6" x2="6" y1="11" y2="13"/><line x1="10" x2="10" y1="11" y2="13"/><line x1="14" x2="14" y1="11" y2="13"/>'),
+            wifi: lucide('<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>'),
+            pin: lucide('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>'),
+            shield: lucide('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>'),
+            phone: lucide('<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'),
+            folder: lucide('<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'),
+            mail: lucide('<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'),
+            call: lucide('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>'),
+            user: lucide('<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
+            volume: lucide('<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>'),
+            terminal: lucide('<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>')
+        };
 
         // Custom parser for rendering pretty tool outputs in chat bubbles
         function formatToolResult(res) {
             if (!res) return '';
             if (typeof res === 'string') {
-                return `<div class="tool-result-item"><span class="tool-icon">⚡</span> ${res}</div>`;
+                return `<div class="tool-result-item"><span class="tool-icon">${ICONS.zap}</span> ${escapeHtml(res)}</div>`;
             }
             if (res.percentage !== undefined) {
                 return `
                     <div class="tool-result-item">
-                        <span class="tool-icon">🔋</span> 
-                        <strong>Battery Status:</strong> ${res.percentage}% (${res.status}, Temp: ${res.temperature}°C, Health: ${res.health})
+                        <span class="tool-icon">${ICONS.battery}</span> 
+                        <strong>Battery Status:</strong> ${escapeHtml(res.percentage)}% (${escapeHtml(res.status)}, Temp: ${escapeHtml(res.temperature)}°C, Health: ${escapeHtml(res.health)})
                     </div>
                 `;
             }
             if (res.ssid !== undefined) {
                 return `
                     <div class="tool-result-item">
-                        <span class="tool-icon">📶</span> 
-                        <strong>Wi-Fi Details:</strong> Connected to "${res.ssid}" (IP: ${res.ip}, RSSI: ${res.rssi}dBm)
+                        <span class="tool-icon">${ICONS.wifi}</span> 
+                        <strong>Wi-Fi Details:</strong> Connected to "${escapeHtml(res.ssid)}" (IP: ${escapeHtml(res.ip)}, RSSI: ${escapeHtml(res.rssi)}dBm)
                     </div>
                 `;
             }
             if (res.latitude !== undefined) {
+                const lat = (typeof res.latitude === 'number') ? res.latitude.toFixed(5) : escapeHtml(res.latitude);
+                const lon = (typeof res.longitude === 'number') ? res.longitude.toFixed(5) : escapeHtml(res.longitude);
                 return `
                     <div class="tool-result-item">
-                        <span class="tool-icon">📍</span> 
-                        <strong>GPS Location:</strong> Latitude: ${res.latitude.toFixed(5)}, Longitude: ${res.longitude.toFixed(5)} (Altitude: ${res.altitude}m)
+                        <span class="tool-icon">${ICONS.pin}</span> 
+                        <strong>GPS Location:</strong> Latitude: ${lat}, Longitude: ${lon} (Altitude: ${escapeHtml(res.altitude)}m)
                     </div>
                 `;
             }
+            if (res.auth_result !== undefined) {
+                return `<div class="tool-result-item"><span class="tool-icon">${ICONS.shield}</span> <strong>Fingerprint:</strong> ${escapeHtml(res.auth_result)}</div>`;
+            }
+            if (res.sim_state !== undefined || res.network_operator_name !== undefined) {
+                return `<div class="tool-result-item"><span class="tool-icon">${ICONS.phone}</span> <strong>Telephony:</strong> ${escapeHtml(res.network_operator_name || res.network_operator || '')} (${escapeHtml(res.network_type || '')}), SIM: ${escapeHtml(res.sim_state || '')}</div>`;
+            }
             if (Array.isArray(res)) {
                 if (res.length === 0) {
-                    return `<div class="tool-result-item"><span class="tool-icon">📁</span> <strong>List Output:</strong> Empty list returned.</div>`;
+                    return `<div class="tool-result-item"><span class="tool-icon">${ICONS.folder}</span> <strong>List Output:</strong> Empty list returned.</div>`;
                 }
                 if (res[0].address !== undefined) {
                     // SMS list
-                    let html = `<div class="tool-result-item"><span class="tool-icon">✉️</span> <strong>Recent SMS Inbox:</strong><ul>`;
+                    let html = `<div class="tool-result-item"><span class="tool-icon">${ICONS.mail}</span> <strong>Recent SMS Inbox:</strong><ul>`;
                     res.forEach(sms => {
-                        html += `<li><strong>${sms.address}</strong>: "${sms.body}" <span class="meta-info">(${sms.date})</span></li>`;
+                        html += `<li><strong>${escapeHtml(sms.address)}</strong>: "${escapeHtml(sms.body)}" <span class="meta-info">(${escapeHtml(sms.date)})</span></li>`;
+                    });
+                    html += `</ul></div>`;
+                    return html;
+                }
+                if (res[0].number !== undefined && res[0].date !== undefined) {
+                    // Call log (name, number, duration, date, type)
+                    let html = `<div class="tool-result-item"><span class="tool-icon">${ICONS.call}</span> <strong>Call Log:</strong><ul>`;
+                    res.forEach(c => {
+                        html += `<li><strong>${escapeHtml(c.name || c.number)}</strong> (${escapeHtml(c.type || '')}) — ${escapeHtml(c.duration || '')} <span class="meta-info">(${escapeHtml(c.date)})</span></li>`;
                     });
                     html += `</ul></div>`;
                     return html;
                 }
                 if (res[0].name !== undefined) {
                     // Contacts list
-                    let html = `<div class="tool-result-item"><span class="tool-icon">👤</span> <strong>Contacts Found:</strong><ul>`;
+                    let html = `<div class="tool-result-item"><span class="tool-icon">${ICONS.user}</span> <strong>Contacts Found:</strong><ul>`;
                     res.forEach(c => {
-                        html += `<li><strong>${c.name}</strong>: ${c.number}</li>`;
+                        html += `<li><strong>${escapeHtml(c.name)}</strong>: ${escapeHtml(c.number)}</li>`;
+                    });
+                    html += `</ul></div>`;
+                    return html;
+                }
+                if (res[0].stream !== undefined) {
+                    // Volume info list
+                    let html = `<div class="tool-result-item"><span class="tool-icon">${ICONS.volume}</span> <strong>Volume Levels:</strong><ul>`;
+                    res.forEach(v => {
+                        html += `<li>${escapeHtml(v.stream)}: ${escapeHtml(v.volume)}/${escapeHtml(v.max_volume)}</li>`;
+                    });
+                    html += `</ul></div>`;
+                    return html;
+                }
+                if (res[0].ssid !== undefined && res[0].bssid !== undefined) {
+                    // Wi-Fi scan list
+                    let html = `<div class="tool-result-item"><span class="tool-icon">${ICONS.wifi}</span> <strong>Nearby Wi-Fi:</strong><ul>`;
+                    res.forEach(n => {
+                        html += `<li><strong>${escapeHtml(n.ssid)}</strong> (${escapeHtml(n.bssid)}, ${escapeHtml(n.rssi)}dBm)</li>`;
                     });
                     html += `</ul></div>`;
                     return html;
@@ -1315,8 +1486,8 @@ HTML_TEMPLATE = """
             // Standard JSON fallback
             return `
                 <div class="tool-result-item">
-                    <span class="tool-icon">⚙️</span> <strong>System Output:</strong>
-                    <pre style="font-family: inherit; font-size: 0.75rem; margin-top: 0.25rem;">${JSON.stringify(res, null, 2)}</pre>
+                    <span class="tool-icon">${ICONS.terminal}</span> <strong>System Output:</strong>
+                    <pre style="font-family: inherit; font-size: 0.75rem; margin-top: 0.25rem;">${escapeHtml(JSON.stringify(res, null, 2))}</pre>
                 </div>
             `;
         }
@@ -1329,7 +1500,7 @@ HTML_TEMPLATE = """
             const userDiv = document.createElement('div');
             userDiv.className = 'message user';
             userDiv.innerHTML = `
-                <div class="bubble">${text}</div>
+                <div class="bubble">${escapeHtml(text)}</div>
                 <div class="meta-info">You</div>
             `;
             chatMessages.appendChild(userDiv);
@@ -1373,7 +1544,7 @@ HTML_TEMPLATE = """
                                 bubbleContent += `
                                     <details class="raw-json-details">
                                         <summary>View raw JSON</summary>
-                                        <pre>${JSON.stringify(res, null, 2)}</pre>
+                                        <pre>${escapeHtml(JSON.stringify(res, null, 2))}</pre>
                                     </details>
                                 `;
                             }
@@ -1383,7 +1554,7 @@ HTML_TEMPLATE = """
                         bubbleContent += `<p style="color: var(--text-muted);">No matching tools were executed. Please rephrase the command.</p>`;
                     }
                 } else {
-                    bubbleContent += `<p style="color: #ef4444;">Runtime execution failure: ${data.error || 'Unknown error'}</p>`;
+                    bubbleContent += `<p style="color: #ef4444;">Runtime execution failure: ${escapeHtml(data.error) || 'Unknown error'}</p>`;
                 }
 
                 // Add reasoning
@@ -1395,7 +1566,7 @@ HTML_TEMPLATE = """
                                 <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                                 reasoning
                             </div>
-                            <p>${data.reasoning}</p>
+                            <p>${escapeHtml(data.reasoning)}</p>
                         </div>
                     `;
                 }
@@ -1403,7 +1574,7 @@ HTML_TEMPLATE = """
                 // Add confidence bar
                 let confidenceHtml = '';
                 if (data.confidence !== null && data.confidence !== undefined) {
-                    const pct = Math.round(data.confidence * 100);
+                    const pct = Math.max(0, Math.min(100, Math.round(Number(data.confidence) * 100) || 0));
                     confidenceHtml = `
                         <div class="confidence-indicator">
                             Confidence: ${pct}%
@@ -1429,7 +1600,7 @@ HTML_TEMPLATE = """
                 if (data.results && data.results.length > 0) {
                     appendLog('Agent', `Executed ${data.results.length} action(s).`);
                 } else {
-                    appendLog('Agent', `No actions run (Reasoning: "${data.reasoning || 'Low confidence'}").`);
+                    appendLog('Agent', `No actions run (Reasoning: "${escapeHtml(data.reasoning) || 'Low confidence'}").`);
                 }
 
             } catch (err) {
@@ -1444,7 +1615,7 @@ HTML_TEMPLATE = """
                 `;
                 chatMessages.appendChild(errDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
-                appendLog('Error', `Network fail: ${err.message}`);
+                appendLog('Error', escapeHtml(`Network fail: ${err.message}`));
             }
         }
 
@@ -1498,6 +1669,7 @@ def favicon_ico():
 @app.route("/photo.jpg")
 def serve_photo():
     possible_paths = [
+        "/sdcard/Download/wahari_photo.jpg",
         os.path.expanduser("~/storage/downloads/wahari_photo.jpg"),
         os.path.expanduser("~/storage/downloads/photo.jpg"),
         os.path.expanduser("~/wahari_photo.jpg"),
@@ -1507,22 +1679,40 @@ def serve_photo():
     ]
     for photo_path in possible_paths:
         if os.path.exists(photo_path):
-            from flask import send_file
             return send_file(photo_path, mimetype="image/jpeg")
     return "Photo not found", 404
+
+@app.route("/api/health", methods=["GET"])
+def health_api():
+    ready = get_agent() is not None
+    return jsonify({
+        "status": "ok" if ready else "degraded",
+        "model": "ready" if ready else f"unavailable: {_agent_init_error}",
+        "termux": IS_TERMUX,
+    }), (200 if ready else 503)
 
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
     try:
-        data = request.get_json() or {}
-        user_message = data.get("message", "").strip()
+        data = request.get_json(silent=True) or {}
+        user_message = str(data.get("message", "")).strip()
         if not user_message:
             return jsonify({"type": "error", "error": "Empty message parameter"}), 400
-        
+        if len(user_message) > 4000:
+            return jsonify({"type": "error", "error": "Message too long (max 4000 chars)"}), 413
+
+        ag = get_agent()
+        if ag is None:
+            return jsonify({
+                "type": "error",
+                "error": f"Model unavailable: {_agent_init_error or 'needle package not installed'}. "
+                         "Install requirements (pip install -r requirements.txt) and retry.",
+            }), 503
+
         # Preprocess query to wrap speech commands in quotes for the Needle 3 model
         processed_message = preprocess_query(user_message)
         # Invoke the Wahari agent loop (Needle 3 model)
-        res = agent.run(processed_message)
+        res = ag.run(processed_message)
         
         return jsonify({
             "query": user_message,
@@ -1537,7 +1727,35 @@ def chat_api():
         return jsonify({"type": "error", "error": str(e)}), 500
 
 # Telegram Bot Daemon Runner
-def start_telegram_bot(token):
+def _telegram_escape(text):
+    """Escape Telegram Markdown special chars so tool output can't break parsing."""
+    if not isinstance(text, str):
+        text = str(text)
+    for ch in ("\\", "`", "*", "_", "[", "]"):
+        text = text.replace(ch, "\\" + ch)
+    return text
+
+def _chunk_message(text, limit=3900):
+    return [text[i:i + limit] for i in range(0, len(text), limit)] or [""]
+
+def parse_telegram_admin_ids(raw):
+    """Parse TELEGRAM_ADMIN_IDS / --admin-ids: digits separated by commas/spaces/newlines."""
+    ids, invalid = set(), []
+    for part in str(raw or "").replace(";", ",").replace("\n", ",").split(","):
+        for token in part.split():
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                val = int(token)
+            except ValueError:
+                invalid.append(token)
+                continue
+            if val != 0:
+                ids.add(val)
+    return ids, invalid
+
+def start_telegram_bot(token, admin_ids=None):
     if not telebot:
         print("[Telegram] Error: telebot library is not available. Install with 'pip install pyTelegramBotAPI'", file=sys.stderr)
         return
@@ -1549,37 +1767,64 @@ def start_telegram_bot(token):
         @bot.message_handler(func=lambda message: True)
         def handle_telegram_message(message):
             query = message.text.strip() if message.text else ""
-            print(f"[Telegram] Message received: '{query}'")
+            sender_id = getattr(getattr(message, "from_user", None), "id", None)
+            chat_type = getattr(getattr(message, "chat", None), "type", "private")
+            # Private/DM chats only: silently ignore groups, supergroups and channels.
+            if chat_type != "private":
+                print(f"[Telegram] Ignoring non-private chat (type={chat_type}) from {sender_id}.")
+                return
+            print(f"[Telegram] Message received from {sender_id}: '{query}'")
             if not query:
                 return
+            if query.strip() == "/myid":
+                bot.reply_to(message, f"Your user ID is {sender_id}. Save it as an admin ID to unlock commands.")
+                return
+            allowed = admin_ids or set()
+            if not allowed or sender_id not in allowed:
+                bot.reply_to(message, "Access denied. This bot only responds to its saved admin IDs. Send /myid to see yours.")
+                return
             try:
+                ag = get_agent()
+                if ag is None:
+                    bot.reply_to(message, "Wahari model unavailable. Check server logs.")
+                    return
                 processed_query = preprocess_query(query)
-                res = agent.run(processed_query)
+                res = ag.run(processed_query)
                 reasoning = res.get("reasoning", "")
                 confidence = res.get("confidence")
                 results = res.get("results") or []
 
                 reply = ""
                 if results:
-                    reply += "⚡ *Tool Execution Results:*\n"
+                    reply += "Tool Execution Results:\n"
                     for r in results:
                         if isinstance(r, dict):
-                            reply += f"```json\n{json.dumps(r, indent=2)}\n```\n"
+                            reply += f"{json.dumps(r, indent=2)}\n"
                         else:
                             reply += f"{r}\n"
                 else:
-                    reply += "⚠️ *No tools were triggered by this command.*\n"
+                    reply += "No tools were triggered by this command.\n"
 
                 if reasoning:
-                    reply += f"\n🧠 *Agent Reasoning:*\n_{reasoning}_\n"
+                    reply += f"\nAgent Reasoning:\n{reasoning}\n"
 
                 if confidence is not None:
-                    reply += f"\n🎯 *Confidence:* {int(confidence * 100)}%"
+                    try:
+                        reply += f"\nConfidence: {int(float(confidence) * 100)}%"
+                    except (TypeError, ValueError):
+                        pass
 
-                bot.reply_to(message, reply, parse_mode="Markdown")
+                for chunk in _chunk_message(reply):
+                    try:
+                        bot.reply_to(message, chunk)
+                    except Exception:
+                        try:
+                            bot.reply_to(message, chunk[:3900])
+                        except Exception:
+                            pass
             except Exception as err:
                 try:
-                    bot.reply_to(message, f"❌ *Error executing command:*\n`{str(err)}`")
+                    bot.reply_to(message, f"Error executing command: {_telegram_escape(str(err))[:3000]}")
                 except Exception:
                     pass
 
@@ -1596,9 +1841,13 @@ def start_telegram_bot(token):
 if __name__ == "__main__":
     # Check for --telegram flag or TELEGRAM_TOKEN env variable first
     telegram_token = os.environ.get("TELEGRAM_TOKEN")
+    admin_ids_raw = os.environ.get("TELEGRAM_ADMIN_IDS", "")
     for idx, arg in enumerate(sys.argv):
         if arg == "--telegram" and idx + 1 < len(sys.argv):
             telegram_token = sys.argv[idx + 1]
+        if arg == "--admin-ids" and idx + 1 < len(sys.argv):
+            admin_ids_raw = sys.argv[idx + 1]
+    telegram_admin_ids, _admin_invalid = parse_telegram_admin_ids(admin_ids_raw)
 
     # If no token is provided, ask the user interactively (only if stdin is a TTY)
     if not telegram_token and sys.stdin.isatty():
@@ -1610,14 +1859,22 @@ if __name__ == "__main__":
                     telegram_token = token_input
                 else:
                     print("No token entered. Proceeding without Telegram.")
+                if telegram_token and not telegram_admin_ids:
+                    ids_input = input("Enter admin Telegram user IDs (comma-separated, send /myid to the bot to see yours): ").strip()
+                    telegram_admin_ids, _admin_invalid = parse_telegram_admin_ids(ids_input)
+                    if _admin_invalid:
+                        print(f"Ignoring invalid IDs: {', '.join(_admin_invalid)}")
         except (KeyboardInterrupt, EOFError):
             print("\nNon-interactive mode or prompt skipped. Proceeding without Telegram.")
     elif not telegram_token:
         print("[Telegram] Non-interactive environment detected. Skipping prompt, proceeding without Telegram.")
 
+    if telegram_token and not telegram_admin_ids:
+        print("[Telegram] Warning: no admin IDs configured (TELEGRAM_ADMIN_IDS / --admin-ids). All commands will be refused until IDs are saved.")
+
     if telegram_token:
         print("[Telegram] Token provided. Launching bot background thread...")
-        telegram_thread = threading.Thread(target=start_telegram_bot, args=(telegram_token,), daemon=True)
+        telegram_thread = threading.Thread(target=start_telegram_bot, args=(telegram_token, telegram_admin_ids), daemon=True)
         telegram_thread.start()
     else:
         print("[Telegram] Info: Remote Telegram control disabled.")
@@ -1628,4 +1885,4 @@ if __name__ == "__main__":
         serve(app, host="0.0.0.0", port=5000)
     else:
         print("[Server] Warning: Waitress not found. Falling back to Flask dev server.")
-        app.run(host="0.0.0.0", port=5000, debug=True)
+        app.run(host="0.0.0.0", port=5000, debug=False)

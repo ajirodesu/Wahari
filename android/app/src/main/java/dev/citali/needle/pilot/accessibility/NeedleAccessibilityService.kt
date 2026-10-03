@@ -18,6 +18,9 @@ import dev.citali.needle.pilot.agent.AgentEngine
 import dev.citali.needle.pilot.overlay.PilotQuestionOverlay
 import dev.citali.needle.pilot.overlay.PilotOverlay
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Observes the accessible UI and executes exactly one validated action at a time.
@@ -121,8 +124,13 @@ class NeedleAccessibilityService : AccessibilityService() {
 
     // ---- Action execution -------------------------------------------------
 
-    /** Executes a physical action. Returns true if it was dispatched successfully. */
-    fun execute(action: Action): Boolean = when (action) {
+    /**
+     * Executes a physical action, awaiting each gesture's completion.
+     * Suspends (never blocks), so result callbacks still run even though the
+     * agent loop lives on the main thread. Returns true only if the platform
+     * accepted and completed the gesture.
+     */
+    suspend fun execute(action: Action): Boolean = when (action) {
         is Action.Tap -> clickTarget(action.target, long = false)
         is Action.LongPress -> clickTarget(action.target, long = true)
         is Action.Swipe -> swipe(action.direction)
@@ -132,19 +140,18 @@ class NeedleAccessibilityService : AccessibilityService() {
         is Action.Wait, is Action.AskUser, is Action.Complete, is Action.Fail -> false
     }
 
-    private fun clickTarget(target: String, long: Boolean): Boolean {
+    private suspend fun clickTarget(target: String, long: Boolean): Boolean {
         val node = resolveNode(target) ?: return false
         return clickNode(node, long)
     }
 
-    private fun clickNode(info: AccessibilityNodeInfo, long: Boolean): Boolean {
+    private suspend fun clickNode(info: AccessibilityNodeInfo, long: Boolean): Boolean {
         val actionId = if (long) AccessibilityNodeInfo.ACTION_LONG_CLICK else AccessibilityNodeInfo.ACTION_CLICK
         if (info.performAction(actionId)) return true
         val bounds = Rect()
         info.getBoundsInScreen(bounds)
         if (bounds.width() > 0 && bounds.height() > 0) {
-            tapAt(bounds.exactCenterX(), bounds.exactCenterY(), if (long) 600L else 60L)
-            return true
+            return tapAt(bounds.exactCenterX(), bounds.exactCenterY(), if (long) 600L else 60L)
         }
         return false
     }
@@ -161,7 +168,7 @@ class NeedleAccessibilityService : AccessibilityService() {
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
     }
 
-    private fun globalKey(key: Action.KeyAction): Boolean = when (key) {
+    private suspend fun globalKey(key: Action.KeyAction): Boolean = when (key) {
         Action.KeyAction.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
         Action.KeyAction.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
         Action.KeyAction.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
@@ -181,7 +188,7 @@ class NeedleAccessibilityService : AccessibilityService() {
      * path), then the on-screen keyboard's own action key, and only then a real
      * submit button in the app -- explicitly never the text field we typed into.
      */
-    private fun imeEnter(): Boolean {
+    private suspend fun imeEnter(): Boolean {
         val focused = focusedEditable()
 
         // 1. The correct API: tell the IME to perform its editor action.
@@ -238,26 +245,76 @@ class NeedleAccessibilityService : AccessibilityService() {
         }.getOrDefault(false)
     }
 
-    private fun swipe(direction: Action.SwipeDirection): Boolean {
+    private suspend fun swipe(direction: Action.SwipeDirection): Boolean {
         val w = resources.displayMetrics.widthPixels.toFloat()
         val h = resources.displayMetrics.heightPixels.toFloat()
         val (sx, sy, ex, ey) = when (direction) {
-            Action.SwipeDirection.UP -> floatArrayOf(w / 2, h * 0.78f, w / 2, h * 0.28f)
-            Action.SwipeDirection.DOWN -> floatArrayOf(w / 2, h * 0.28f, w / 2, h * 0.78f)
-            Action.SwipeDirection.LEFT -> floatArrayOf(w * 0.82f, h / 2, w * 0.18f, h / 2)
-            Action.SwipeDirection.RIGHT -> floatArrayOf(w * 0.18f, h / 2, w * 0.82f, h / 2)
+            Action.SwipeDirection.UP -> floatArrayOf(w / 2, h * 0.72f, w / 2, h * 0.30f)
+            Action.SwipeDirection.DOWN -> floatArrayOf(w / 2, h * 0.30f, w / 2, h * 0.72f)
+            Action.SwipeDirection.LEFT -> floatArrayOf(w * 0.78f, h / 2, w * 0.22f, h / 2)
+            Action.SwipeDirection.RIGHT -> floatArrayOf(w * 0.22f, h / 2, w * 0.78f, h / 2)
         }
-        gesture(sx, sy, ex, ey, 400L)
-        return true
+        // One steady stroke (~0.4 screen-heights in 450ms) reads as a smooth
+        // drag rather than a fling, so lists settle where the next snapshot
+        // expects them instead of overshooting mid-animation.
+        return gesture(sx, sy, ex, ey, durationMs = 450L, settleMs = 300L)
     }
 
-    private fun tapAt(x: Float, y: Float, durationMs: Long) = gesture(x, y, x, y, durationMs)
+    private suspend fun tapAt(x: Float, y: Float, durationMs: Long): Boolean =
+        // lineTo the same point would be a zero-length path, which the
+        // framework may reject; a 1px stroke is still felt as a tap.
+        gesture(x, y, x + 1f, y + 1f, durationMs, settleMs = 150L)
 
-    private fun gesture(sx: Float, sy: Float, ex: Float, ey: Float, durationMs: Long) {
-        val path = Path().apply { moveTo(sx, sy); lineTo(ex, ey) }
-        val stroke = GestureDescription.StrokeDescription(path, 0, durationMs)
+    /**
+     * Dispatches one stroke and suspends until the platform reports
+     * completion (or a timeout expires). Awaiting completion keeps actions
+     * sequenced: the next snapshot is always taken after the gesture
+     * finished instead of mid-animation. Coordinates are clamped inside the
+     * display so edge swipes never start in a system-gesture dead zone.
+     */
+    private suspend fun gesture(
+        sx: Float,
+        sy: Float,
+        ex: Float,
+        ey: Float,
+        durationMs: Long,
+        settleMs: Long = 250L,
+    ): Boolean {
+        val w = resources.displayMetrics.widthPixels.toFloat()
+        val h = resources.displayMetrics.heightPixels.toFloat()
+        val inset = 16f
+        fun clampX(v: Float) = v.coerceIn(inset, (w - inset).coerceAtLeast(inset))
+        fun clampY(v: Float) = v.coerceIn(inset, (h - inset).coerceAtLeast(inset))
+        val path = Path().apply {
+            moveTo(clampX(sx), clampY(sy))
+            lineTo(clampX(ex), clampY(ey))
+        }
+        val stroke = GestureDescription.StrokeDescription(path, 0, durationMs.coerceIn(1L, 5000L))
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
-        dispatchGesture(gesture, null, mainHandler)
+        val completed = withTimeoutOrNull(durationMs + 3000L) {
+            suspendCancellableCoroutine { continuation ->
+                val started = runCatching {
+                    dispatchGesture(
+                        gesture,
+                        object : GestureResultCallback() {
+                            override fun onCompleted(gestureDescription: GestureDescription?) {
+                                if (continuation.isActive) continuation.resume(true, null)
+                            }
+
+                            override fun onCancelled(gestureDescription: GestureDescription?) {
+                                if (continuation.isActive) continuation.resume(false, null)
+                            }
+                        },
+                        mainHandler,
+                    )
+                }.getOrDefault(false)
+                if (!started && continuation.isActive) continuation.resume(false, null)
+            }
+        } ?: false
+        if (completed && settleMs > 0) {
+            delay(settleMs)
+        }
+        return completed
     }
 
     /**

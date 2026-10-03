@@ -65,7 +65,9 @@ class MainActivity : FragmentActivity() {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false
         }
-        if (NeedlePrefs.telegramEnabled(this) && NeedlePrefs.telegramToken(this).isNotBlank()) {
+        if (NeedlePrefs.telegramEnabled(this) && NeedlePrefs.telegramToken(this).isNotBlank() &&
+            NeedlePrefs.telegramAdminIds(this).isNotEmpty()
+        ) {
             TelegramBridge.start(this, NeedlePrefs.telegramToken(this))
         }
         NeedleEngine.refresh(this)

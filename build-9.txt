@@ -1,0 +1,6 @@
+run=9
+commit=c123c54221cf61caa48b55a4734bae98432ced89
+ref=main
+weights_sha256=c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38
+weights_size=35335380
+apk_sha256=c6a3689e55da8eff60bbffe1bfe75e4039263c87c7db010a2184fab1c7d09895

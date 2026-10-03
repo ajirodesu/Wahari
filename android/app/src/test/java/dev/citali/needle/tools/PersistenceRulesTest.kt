@@ -69,7 +69,7 @@ class PersistenceRulesTest {
     fun adminIdsRejectGarbageAndZero() {
         val (ids, invalid) = NeedlePrefs.parseTelegramAdminIds("123, abc, 0, , 456")
         assertEquals(setOf(123L, 456L), ids)
-        assertEquals(listOf("abc"), invalid)
+        assertEquals(listOf("abc", "0"), invalid)
     }
 
     @Test

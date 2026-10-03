@@ -60,18 +60,66 @@ import kotlinx.coroutines.launch
 /** Sheet anchors: hidden, default height, near-full height. */
 enum class SheetValue { Closed, Partial, Expanded }
 
+/** Fling thresholds in dp/s. Positive velocity is downward (finger moving down). */
+internal const val SHEET_FLING_DP = 1000f
+
+/** A fast downward fling skips the middle anchor straight to Closed. */
+internal const val SHEET_FLING_SKIP_DP = 2000f
+
+/**
+ * Pure anchor choice: which snap point a release at [current] (px, 0 = expanded)
+ * with [velocityDp] (+down / −up, dp/s) settles to.
+ *
+ * Slow releases snap to the nearest anchor; fast flings honor direction, with a
+ * fast fling down skipping straight to Closed.
+ */
+internal fun resolveSheetTarget(
+    current: Float,
+    velocityDp: Float,
+    partialPx: Float,
+    expandedPx: Float,
+    allowExpand: Boolean,
+): SheetValue {
+    // Fast fling down from EXPANDED skips PARTIAL straight to CLOSED.
+    if (velocityDp > SHEET_FLING_SKIP_DP && current < partialPx) return SheetValue.Closed
+    if (velocityDp < -SHEET_FLING_DP) {
+        return if (allowExpand) SheetValue.Expanded else SheetValue.Partial
+    }
+    if (velocityDp > SHEET_FLING_DP) {
+        return if (current < partialPx) SheetValue.Partial else SheetValue.Closed
+    }
+    // Otherwise the nearest anchor (past 50% progress).
+    val candidates = listOf(
+        SheetValue.Expanded to 0f,
+        SheetValue.Partial to partialPx,
+        SheetValue.Closed to expandedPx,
+    ).filter { (v, _) -> v != SheetValue.Expanded || allowExpand }
+    return candidates.minByOrNull { (_, px) -> abs(current - px) }?.first
+        ?: SheetValue.Partial
+}
+
+/** Finger-tracking state kept outside snapshots: written per touch delta, never recomposed. */
+private class SheetDragTracker {
+    var active = false
+    var anchor = 0f
+}
+
 /**
  * Claude-style bottom sheet shared by every modal in the app.
  *
- * - One [offset] Animatable (px, 0 = expanded) is the single position source.
- *   Drags drive it with snapTo (1:1, no lag); releases settle with a spring
- *   that starts from the release velocity, so nothing ever jumps.
- * - The offset is read inside draw-scope lambdas only: dragging invalidates
- *   draw/layout of the sheet, never the whole screen.
- * - Nested scroll contract: swipe up at PARTIAL grows the sheet before the
+ * - One [offset] Animatable (px, 0 = expanded) is the single position source,
+ *   keyed on pixel sizes only so programmatic changes animate instead of
+ *   jumping. Releases settle with a spring that starts from the release
+ *   velocity; anchor choice lives in [resolveSheetTarget] and is unit-tested.
+ * - Drags accumulate 1:1 in a [SheetDragTracker] synchronously per delta, so
+ *   queued frames can never compute from a stale offset and lose movement.
+ * - Nested scroll contract: swipe up below EXPANDED grows the sheet before the
  *   content scrolls; swipe down scrolls content first and only drags the sheet
- *   once the content is at its top; leftover fling velocity passes through.
+ *   once the content is at its top; leftover fling velocity passes through
+ *   with pointer-coordinate signs (down = +y, no flip).
  * - Touching during an animation stops it and hands control to the finger.
+ * - Axis lock is decided once, past touch slop, for the whole drag; a plain
+ *   tap never consumes, so clicks still fire.
  * - Only the first pointer is tracked; anything else is ignored.
  */
 @Composable
@@ -98,44 +146,51 @@ fun DraggableBottomSheet(
         SheetValue.Expanded -> 0f
     }
 
-    val offset = remember(value, partialPx, expandedPx) { Animatable(anchorPx(value)) }
+    // The Animatable is keyed on pixel sizes only: recreating it on every
+    // `value` change used to jump straight to the target anchor instead of
+    // animating. Programmatic changes animate via LaunchedEffect below.
+    val offset = remember(partialPx, expandedPx) { Animatable(anchorPx(value)) }
+    val drag = remember { SheetDragTracker() }
     var settling by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
     var dismissPx by remember { mutableFloatStateOf(0f) }
     var sheetWidthPx by remember { mutableFloatStateOf(0f) }
     val scroll = rememberScrollState()
+    val rubberPx = with(density) { 48.dp.toPx() }
 
-    fun flingThresholdDp(): Float = 1000f
     fun pxPerDp(): Float = with(density) { 1.dp.toPx() }
 
+    /** Ends finger tracking. Idempotent; safe to call from every release path. */
+    fun endDrag() {
+        drag.active = false
+        dragging = false
+    }
+
+    /** Starts finger tracking: cancels any settle animation and stops the spring. */
+    fun beginDrag() {
+        if (drag.active) return
+        drag.active = true
+        drag.anchor = offset.value
+        dragging = true
+        settleJob?.cancel()
+        settling = false
+        scope.launch { offset.stop() }
+    }
+
     fun settleSheet(velocityPx: Float = 0f) {
+        endDrag()
         settleJob?.cancel()
         settling = true
         settleJob = scope.launch {
             val velocityDp = velocityPx / pxPerDp()
-            val current = offset.value
-            val partial = anchorPx(SheetValue.Partial)
-            val target = when {
-                // Fast fling down from EXPANDED skips PARTIAL straight to CLOSED.
-                velocityDp > 2000f && current < partial -> SheetValue.Closed
-                velocityDp < -flingThresholdDp() -> {
-                    if (allowExpand) SheetValue.Expanded else SheetValue.Partial
-                }
-                velocityDp > flingThresholdDp() -> {
-                    if (current < partial) SheetValue.Partial else SheetValue.Closed
-                }
-                // Otherwise the nearest anchor (past 50% progress).
-                else -> {
-                    val candidates = listOf(
-                        SheetValue.Expanded to 0f,
-                        SheetValue.Partial to partial,
-                        SheetValue.Closed to expandedPx,
-                    ).filter { (v, _) -> v == SheetValue.Expanded && allowExpand || v != SheetValue.Expanded }
-                    candidates.minByOrNull { (_, px) -> abs(current - px) }?.first
-                        ?: SheetValue.Partial
-                }
-            }
+            val target = resolveSheetTarget(
+                current = offset.value,
+                velocityDp = velocityDp,
+                partialPx = anchorPx(SheetValue.Partial),
+                expandedPx = expandedPx,
+                allowExpand = allowExpand,
+            )
             try {
                 offset.animateTo(
                     anchorPx(target),
@@ -153,9 +208,10 @@ fun DraggableBottomSheet(
         }
     }
 
-    // Programmatic changes (open, scrim tap, Back): smooth, no velocity.
-    LaunchedEffect(value) {
-        if (!settling && abs(offset.value - anchorPx(value)) > 1f && !dragging) {
+    // Programmatic changes (open, scrim tap, Back, option select): smooth, no velocity.
+    LaunchedEffect(value, partialPx, expandedPx) {
+        if (!dragging && abs(offset.value - anchorPx(value)) > 1f) {
+            endDrag()
             settleJob?.cancel()
             settleJob = scope.launch {
                 try {
@@ -183,16 +239,23 @@ fun DraggableBottomSheet(
 
     fun applyVerticalDrag(dy: Float) {
         // dy > 0 = finger moving down = sheet shrinking (offset grows).
-        val desired = offset.value + dy
+        // The anchor accumulates synchronously per delta, so queued frames can
+        // never compute from a stale offset and lose movement; every frame
+        // snaps to the latest anchor and the sheet tracks the finger 1:1.
+        beginDrag()
+        drag.anchor += dy
+        val desired = drag.anchor
+        val clamped = when {
+            // Rubber-band above EXPANDED: ~20% of the finger movement.
+            desired < minOffset -> minOffset + (desired - minOffset) * 0.2f
+            desired > expandedPx -> expandedPx
+            else -> desired
+        }.coerceIn(minOffset - rubberPx, expandedPx)
+        drag.anchor = clamped
+        val target = clamped
         scope.launch {
             offset.stop()
-            val clamped = when {
-                // Rubber-band above EXPANDED: ~20% of the finger movement.
-                desired < minOffset -> minOffset + (desired - minOffset) * 0.2f
-                desired > expandedPx -> expandedPx
-                else -> desired
-            }
-            offset.snapTo(clamped.coerceIn(minOffset - with(density) { 48.dp.toPx() }, expandedPx))
+            offset.snapTo(target)
         }
     }
 
@@ -229,10 +292,10 @@ fun DraggableBottomSheet(
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 // Hand the leftover fling to the sheet so the motion continues.
-                // NOTE: the framework reports this velocity sign-inverted relative
-                // to drag deltas (verified on-device: a downward release fling
-                // arrives negative), so negate it into pointer coordinates.
-                settleSheet(-available.y)
+                // Velocity follows pointer coordinates (down = +y), the same
+                // convention as the drag deltas and VelocityTracker, so no
+                // sign flip: a downward fling settles down, an upward one up.
+                settleSheet(available.y)
                 return available
             }
         }
@@ -259,7 +322,7 @@ fun DraggableBottomSheet(
                             val v = runCatching { tracker.calculateVelocity() }.getOrNull()
                             if (lockedHorizontal) {
                                 val width = sheetWidthPx.coerceAtLeast(1f)
-                                val flingX = abs(v?.x ?: 0f) > flingThresholdDp() * pxPerDp()
+                                val flingX = abs(v?.x ?: 0f) > SHEET_FLING_DP * pxPerDp()
                                 if (abs(dismissPx) > width / 4f || (flingX && dismissPx != 0f)) {
                                     val target = width * sign(dismissPx).let { if (it == 0f) 1f else it }
                                     settling = true
@@ -294,9 +357,9 @@ fun DraggableBottomSheet(
                                     }
                                 }
                             } else {
-                                settleSheet(v?.y ?: 0f)
-                            }
-                            dragging = false
+                            settleSheet(v?.y ?: 0f)
+                        }
+                        endDrag()
                         } else {
                             // Plain tap: never consume, so handle clicks still fire.
                             return@awaitEachGesture
@@ -320,10 +383,7 @@ fun DraggableBottomSheet(
                             lockedHorizontal = true
                             totalX -= sign(totalX) * slop.coerceAtMost(abs(totalX))
                         }
-                        dragging = true
-                        settleJob?.cancel()
-                        settling = false
-                        scope.launch { offset.stop() }
+                        beginDrag()
                     }
                     if (lockedHorizontal) {
                         change.consume()
@@ -345,7 +405,7 @@ fun DraggableBottomSheet(
             } catch (_: Exception) {
                 // Pointer cancelled: settle to the nearest anchor, never stuck.
                 if (lockedVertical || lockedHorizontal) {
-                    dragging = false
+                    endDrag()
                     dismissPx = 0f
                     settleSheet()
                 }

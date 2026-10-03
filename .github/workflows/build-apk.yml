@@ -91,9 +91,11 @@ jobs:
             fi
             echo "${sha}  ${out}" | sha256sum -c -
           }
-          # arm64-v8a is the only ABI built: the 32-bit archive Cactus publishes
-          # is linked against an older libc++ (std::__hash_memory) and does not
-          # link with NDK 27.
+          # arm64-v8a carries the real engine; armeabi-v7a, x86_64 and x86
+          # build the stub (no engine) so the APK installs on any device.
+          # The 32-bit archive Cactus publishes is linked against an older
+          # libc++ (std::__hash_memory) and does not link with NDK 27, and
+          # Cactus publishes no x86 engine at all.
           fetch arm64-v8a android-arm64 16752fb75adea7af89bbc435a97d1cda7e71bc74d04578d551d0d3bbd5f9e633
           # Keep the licence text that ships next to the engine with the build.
           curl -fL --retry 3 -o ../licenses/Apache-2.0.txt \
@@ -185,6 +187,7 @@ jobs:
           NEEDLE_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           NEEDLE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           NEEDLE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          WAHARI_EXPECTED_CERT_SHA256: ${{ secrets.EXPECTED_CERT_SHA256 }}
         run: |
           set -o pipefail
           ./gradlew --no-daemon --stacktrace :app:assembleRelease 2>&1 | tee -a /tmp/wahari-build.log
@@ -242,6 +245,14 @@ jobs:
 
           echo "Native libraries in the APK:"
           unzip -l "$apk" 'lib/*' | sed -n '1,40p'
+          # Universal APK: every shipped ABI must carry the JNI bridge (real
+          # engine on arm64, stub elsewhere) so the app installs on any device.
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            if ! unzip -l "$apk" | grep -qF "lib/${abi}/libneedlejni.so"; then
+              echo "::error::The APK is missing lib/${abi}/libneedlejni.so"
+              exit 1
+            fi
+          done
           for lib in lib/arm64-v8a/libneedlejni.so lib/arm64-v8a/libc++_shared.so; do
             if ! unzip -l "$apk" | grep -qF "$lib"; then
               echo "::error::The APK is missing $lib"

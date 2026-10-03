@@ -22,7 +22,10 @@ echo "---- install ----"
 adb install -r -g "$apk"
 
 echo "---- launch ----"
-adb shell am start -W -n com.ajirodesu.wahari/.MainActivity
+# Component must use the real class name: the manifest namespace is
+# dev.citali.needle while the applicationId is com.ajirodesu.wahari, so the
+# ".MainActivity" shorthand would resolve to a class that does not exist.
+adb shell am start -W -n com.ajirodesu.wahari/dev.citali.needle.MainActivity
 
 sleep 20
 

@@ -28,17 +28,15 @@ set(NEEDLE_HF_BASE "https://huggingface.co/Cactus-Compute/needle3/resolve/main")
 
 if(ANDROID_ABI STREQUAL "arm64-v8a")
     set(NEEDLE_PLATFORM "android-arm64")
-    set(NEEDLE_LIB_SHA256 "b8e73952054686f68e4319dcf69ad72a3de57faab73b73d9a67898f2c9d66110")
+    set(NEEDLE_LIB_SHA256 "16752fb75adea7af89bbc435a97d1cda7e71bc74d04578d551d0d3bbd5f9e633")
 elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
-    set(NEEDLE_PLATFORM "android-armv7")
-    set(NEEDLE_LIB_SHA256 "40e8dcf4440281fc248302c25f0ddc87fcc9d52a210a216f06f2aad3de42c86c")
     # The published 32-bit archive was built against an older libc++ and expects
-    # std::__hash_memory, which NDK 27 no longer provides, so this ABI does not
-    # link. app/build.gradle.kts therefore builds arm64-v8a only; set
-    # NEEDLE_ABIS=arm64-v8a,armeabi-v7a to see the failure yourself.
-    message(WARNING
-        "The Needle engine archive for armeabi-v7a cannot be linked against modern NDKs; "
-        "build arm64-v8a only.")
+    # std::__hash_memory, which modern NDKs no longer provide, so it cannot be
+    # linked. Build a stub here on purpose: the app installs and runs on 32-bit
+    # ARM phones and reports the engine as unavailable for that CPU instead of
+    # pretending to think.
+    set(NEEDLE_STUB_FORCED ON)
+    message(STATUS "armeabi-v7a uses the stub engine (published archive is unlinkable); app stays installable.")
 elseif(ANDROID_ABI STREQUAL "x86_64" OR ANDROID_ABI STREQUAL "x86" OR ANDROID_ABI STREQUAL "riscv64")
     set(NEEDLE_PLATFORM "android-${ANDROID_ABI}")
     message(WARNING "Needle publishes no engine for ${ANDROID_ABI}; no input tools will be available on that ABI.")
@@ -49,7 +47,20 @@ endif()
 set(NEEDLE_STUB OFF)
 set(NEEDLE_PREBUILT "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/libneedle.a")
 
-if(NOT EXISTS "${NEEDLE_PREBUILT}")
+if(NEEDLE_STUB_FORCED)
+    set(NEEDLE_STUB ON)
+    message(STATUS "Forced stub engine for ${ANDROID_ABI}; on-device inference will be unavailable on that ABI.")
+else()
+    # Never trust a pre-placed archive blindly: a stale cache from an older
+    # engine version must fail loudly (and refetch) instead of linking silently.
+    if(EXISTS "${NEEDLE_PREBUILT}")
+        file(SHA256 "${NEEDLE_PREBUILT}" NEEDLE_CACHED_SHA)
+        if(NOT NEEDLE_CACHED_SHA STREQUAL NEEDLE_LIB_SHA256)
+            message(WARNING "Cached engine archive is stale (sha ${NEEDLE_CACHED_SHA}); removing and refetching.")
+            file(REMOVE "${NEEDLE_PREBUILT}")
+        endif()
+    endif()
+    if(NOT EXISTS "${NEEDLE_PREBUILT}")
     if(NEEDLE_PLATFORM MATCHES "^android-(arm64|armv7)$")
         set(NEEDLE_LIB_URL "${NEEDLE_HF_BASE}/${NEEDLE_PLATFORM}/libneedle.a?download=true")
         message(STATUS "Fetching Needle ${NEEDLE_ENGINE_VERSION} engine for ${ANDROID_ABI} from ${NEEDLE_LIB_URL}")
@@ -74,6 +85,7 @@ if(NOT EXISTS "${NEEDLE_PREBUILT}")
     else()
         set(NEEDLE_STUB ON)
         message(WARNING "No prebuilt Needle engine for ${ANDROID_ABI}; on-device inference will be unavailable on that ABI.")
+    endif()
     endif()
 endif()
 

@@ -46,6 +46,12 @@ val needleWeightsSize: Long = env("NEEDLE_WEIGHTS_SIZE")?.toLongOrNull() ?: 35_3
 val needleVersionCode: Int = env("NEEDLE_VERSION_CODE")?.toIntOrNull() ?: 1
 val needleVersionName: String = env("NEEDLE_VERSION_NAME") ?: "0.0.1"
 
+// SHA-256 fingerprint the installed APK must present for the in-app
+// developer certificate to report VERIFIED. Empty = unpinned project-key
+// build (the default for sideloading); set WAHARI_EXPECTED_CERT_SHA256 for a
+// private release key. Also honoured by the legacy Python /api/certificate.
+val wahariExpectedCertSha256: String = env("WAHARI_EXPECTED_CERT_SHA256") ?: ""
+
 android {
     namespace = "dev.citali.needle"
     compileSdk = 35
@@ -53,20 +59,26 @@ android {
 
     defaultConfig {
         applicationId = "com.ajirodesu.wahari"
-        minSdk = 29
+        // Android 7.0 covers effectively every active device. All API-gated
+        // calls in the app are version-checked (vibrator, notifications,
+        // SMS manager, location fix, accessibility), so nothing below needs 29.
+        minSdk = 24
         targetSdk = 35
         versionCode = needleVersionCode
         versionName = needleVersionName
 
-        // arm64-v8a carries the real engine. Cactus also publishes armeabi-v7a,
-        // but that archive was compiled against an older libc++ and calls
-        // internal helpers (std::__hash_memory) that current NDKs no longer
-        // ship, so it cannot be linked. x86_64 builds without an engine: the app
-        // installs and runs in an emulator, says the engine is unavailable for
-        // that CPU, and the emulator smoke test in CI exercises exactly that.
-        // Override with NEEDLE_ABIS.
+        // One universal APK for every major ABI, so the app installs on any
+        // phone, tablet, Chromebook or emulator:
+        //   arm64-v8a   carries the real Needle engine (on-device inference)
+        //   armeabi-v7a stub build: installs and runs on 32-bit ARM phones
+        //               (the published 32-bit engine archive was compiled
+        //               against an older libc++ and cannot link with modern
+        //               NDKs, so CMake builds a stub there on purpose)
+        //   x86_64/x86  stub builds: install and run on emulators/Chromebooks
+        // On a stub ABI the app says the engine is unavailable for that CPU
+        // instead of pretending to think. Override with NEEDLE_ABIS.
         ndk {
-            abiFilters += (System.getenv("NEEDLE_ABIS") ?: "arm64-v8a,x86_64")
+            abiFilters += (System.getenv("NEEDLE_ABIS") ?: "arm64-v8a,armeabi-v7a,x86_64,x86")
                 .split(",").map { it.trim() }.filter { it.isNotEmpty() }
         }
 
@@ -87,6 +99,7 @@ android {
         buildConfigField("String", "NEEDLE_WEIGHTS_URL", "\"$needleWeightsUrl\"")
         buildConfigField("String", "NEEDLE_WEIGHTS_SHA256", "\"$needleWeightsSha256\"")
         buildConfigField("long", "NEEDLE_WEIGHTS_SIZE", "${needleWeightsSize}L")
+        buildConfigField("String", "WAHARI_EXPECTED_CERT_SHA256", "\"$wahariExpectedCertSha256\"")
     }
 
     externalNativeBuild {

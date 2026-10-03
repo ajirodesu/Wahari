@@ -173,7 +173,13 @@ object PhoneTools {
                 context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             }
             if (vibrator == null || !vibrator.hasVibrator()) return@tool "This device has no vibrator."
-            vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+            // VibrationEffect needs API 26+; older devices use the deprecated call.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(duration)
+            }
             "Vibrated for ${duration}ms."
         },
 

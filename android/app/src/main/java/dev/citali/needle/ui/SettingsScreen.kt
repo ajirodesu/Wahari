@@ -476,6 +476,8 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             engineVersion = ModelRepository.ENGINE_VERSION,
             foregroundHooksActive = ActivityBridges.hasCamera,
         )
+
+        DeveloperCertificateCard()
     }
 }
 

@@ -16,9 +16,10 @@ from two other projects. Both are used with their licences intact.
 - https://github.com/cactus-compute/needle
 - https://huggingface.co/Cactus-Compute/needle3
 - Vendored: `android/app/src/main/cpp/needle.h` (the public C header).
-- Downloaded at build time: `libneedle.a` (the engine, per ABI) from
-  `Cactus-Compute/needle3`, checksum-verified against the hashes in
-  `android/app/src/main/cpp/CMakeLists.txt`.
+- Downloaded at build time: `libneedle.a` (the `arm64-v8a` engine) from
+  `Cactus-Compute/needle3`, checksum-verified against the hash in
+  `android/app/src/main/cpp/CMakeLists.txt` (cached archives are re-verified;
+  the other ABIs build an engine-less stub so the APK installs everywhere).
 - Downloaded on the device, once: `needle3.cact` (the 2-bit quantised weights),
   verified against the SHA-256 pinned in `android/app/build.gradle.kts`.
 
@@ -49,3 +50,10 @@ The full MIT text is in `licenses/MIT-TaskPilot.txt`.
 
 Jetpack Compose, AndroidX, Material 3, Kotlin and the Gradle wrapper are used
 under their respective Apache-2.0 / MIT licences.
+
+## Developer certificate
+
+Wahari's developer identity (AjiroDesu) is certified in
+[`DEVELOPER_CERTIFICATE.md`](DEVELOPER_CERTIFICATE.md) and verifiable at
+runtime via `dev.citali.needle.engine.DeveloperCertificate`
+(Settings → Developer certificate) and `GET /api/certificate`.

@@ -56,7 +56,8 @@ on-device model and answer in the chat. Useful when the phone is in another room
 
 ## First run
 
-1. **Install the APK** from the latest release or a workflow artefact.
+1. **Install the APK** from the latest release or a workflow artefact (any device on
+   Android 7.0+, 32- or 64-bit ARM, x86 Chromebook or emulator).
 2. **Download the model** — 35 MB, once. Tap *Download* in the chat (or Settings → On-device
    model). It is checksum-verified against the hash the build was compiled with, resumes if it
    drops, and can also be imported from a `.cact` file for air-gapped installs. After that the app
@@ -87,9 +88,12 @@ android/                                  Gradle project (the APK)
 ```
 
 **The engine.** Cactus Compute publishes the Needle runtime as a static archive per Android ABI.
-CMake fetches it at configure time, verifies the SHA-256 published by Hugging Face, and links it
+CMake fetches the `arm64-v8a` archive at configure time, verifies its SHA-256, and links it
 into `libneedlejni.so`, so the APK carries a real inference engine and the weights stay a one-time
-download. `needle_init` builds the static prefix from a system prompt plus the tool schemas — the
+download. Cached archives are re-verified (a stale cache is deleted and refetched, never linked
+silently). The other ABIs (`armeabi-v7a`, `x86_64`, `x86`) build a stub bridge, so the APK still
+installs and runs there and honestly reports the engine as unavailable for that CPU.
+`needle_init` builds the static prefix from a system prompt plus the tool schemas — the
 same contract the Python package uses — and the decode grammar then guarantees that every reply
 is a valid tool call.
 
@@ -127,8 +131,24 @@ If the committed keystore cannot be read, the workflow generates a fresh PKCS#12
 build and warns — a build never fails for want of a signature.
 
 Two more knobs: `NEEDLE_VERSION_CODE` / `NEEDLE_VERSION_NAME` (the workflow sets these from the run
-number), and `NEEDLE_ALLOW_STUB=ON`, which builds without the engine for ABIs Cactus does not
-publish — the app then says so instead of pretending to think.
+number); `NEEDLE_ABIS` (default `arm64-v8a,armeabi-v7a,x86_64,x86` — set `NEEDLE_ABIS=arm64-v8a`
+for a smaller phone-only APK); and `NEEDLE_ALLOW_STUB=ON`, which lets an `arm64-v8a` build
+succeed without the engine when the download fails — the app then says so instead of
+pretending to think.
+
+**Developer certificate.** The app proves its own identity at runtime: Settings → Developer
+certificate shows the developer (AjiroDesu), package name, version and the SHA-256 fingerprint
+of the APK signing certificate, with a tap-to-copy button. Compare it with
+`apksigner verify --print-certs` or the release `SHA256SUMS`. Details:
+[`DEVELOPER_CERTIFICATE.md`](DEVELOPER_CERTIFICATE.md). To make the in-app badge report
+`VERIFIED` instead of `UNPINNED`, bake in the expected fingerprint:
+
+| Secret / env var | Meaning |
+| --- | --- |
+| `EXPECTED_CERT_SHA256` (secret) / `WAHARI_EXPECTED_CERT_SHA256` (env) | colon-separated SHA-256 of the release signing certificate |
+
+A build whose runtime certificate differs from the pinned value reports `MISMATCH` — treat it
+as untrusted.
 
 ## What a build does
 
@@ -140,12 +160,14 @@ Each run of the workflow (`.github/workflows/build-apk.yml`) does this, in order
    checksum an APK enforces on first run is always the checksum of the bytes that are really
    published;
 4. builds `:app:assembleRelease` with the release keystore;
-5. asserts the APK's package name, its native libraries and `arm64-v8a` native code, then verifies
+5. asserts the APK's package name, `libneedlejni.so` in all four ABIs (`arm64-v8a`,
+   `armeabi-v7a`, `x86_64`, `x86`) and the real engine inside `arm64-v8a`, then verifies
    the signature with `apksigner` and writes `SHA256SUMS`;
 6. uploads `Wahari-0.0.<run>-<sha>.apk` as an artifact, publishes the `wahari-build-<run>`
    pre-release (newest 10 kept) and, on `main`, refreshes `wahari-latest`;
-7. runs the JVM unit tests — the tool-schema shape the engine's grammar compiles and the safety
-   policy that guards screen automation. They run last on purpose: a failing test turns the build
+7. runs the JVM unit tests — the tool-schema shape the engine's grammar compiles, the safety
+   policy that guards screen automation, the developer-certificate fingerprint helpers and the
+   device-compatibility contract. They run last on purpose: a failing test turns the build
    red, but it can never be the reason a release is missing its APK;
 8. a second job boots an x86_64 emulator, installs the APK it just built, launches it and fails the
    run if the app dies, lands in the crash buffer, or is not the resumed activity. It also uploads
@@ -160,15 +182,15 @@ Every build also records what it resolved (weights hash, APK hash) on the `ci-lo
 cd android
 ./gradlew :app:assembleRelease          # signed → app/build/outputs/apk/release/
 ./gradlew :app:assembleDebug            # installable side-by-side build (.debug suffix)
-./gradlew :app:testReleaseUnitTest      # JVM tests (tool schemas, safety policy)
+./gradlew :app:testReleaseUnitTest      # JVM tests (schemas, safety, certificate, compatibility)
 ```
 
-CMake downloads `libneedle.a` on the first build and caches it in `app/src/main/cpp/prebuilt/`.
-The release APK carries native code for `arm64-v8a` (the real engine) and `x86_64` (no engine, so
-the app installs and runs in an emulator and says the engine is unavailable for that CPU). Cactus
-also publishes a 32-bit `armeabi-v7a` archive, but it was compiled against an older libc++ and calls
-an internal helper (`std::__hash_memory`) that current NDKs no longer provide, so it cannot be
-linked; build with `NEEDLE_ABIS=arm64-v8a,armeabi-v7a` to try it against a different NDK.
+CMake downloads `libneedle.a` (SHA-256 verified) on the first build and caches it in
+`app/src/main/cpp/prebuilt/`; a stale cache is deleted and refetched, never linked silently.
+The release APK is universal: `arm64-v8a` (real engine), `armeabi-v7a` (stub — Cactus's 32-bit
+archive no longer links against current NDKs, so the app installs and runs there and says the
+engine is unavailable for that CPU), plus `x86_64`/`x86` stubs for emulators and Chromebooks.
+Override with `NEEDLE_ABIS` (e.g. `NEEDLE_ABIS=arm64-v8a` for a smaller APK).
 
 ## Privacy and safety
 
@@ -185,9 +207,10 @@ linked; build with `NEEDLE_ABIS=arm64-v8a,armeabi-v7a` to try it against a diffe
 
 ## Limitations
 
-- **arm64 only for inference.** The APK installs and runs on 64-bit ARM phones, where the engine
-  is built in, and on x86_64 emulators, where it is not — Cactus Compute publishes no x86 engine,
-  and their 32-bit ARM archive no longer links against current NDKs.
+- **Installs everywhere, thinks on 64-bit ARM.** The APK installs on any Android 7.0+ device
+  (phones, tablets, foldables, Chromebooks, emulators — every major ABI, all screens, no
+  mandatory hardware features). On-device inference needs `arm64-v8a`; on other CPUs the app
+  runs and says the engine is unavailable for that CPU instead of pretending to think.
 - The Needle model is small on purpose. It is excellent at picking tools and filling arguments and
   it says so when a request is out of scope; it is not a general chatbot.
 - Secure screens, WebViews and apps that block accessibility cannot be automated — the loop pauses

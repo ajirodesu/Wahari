@@ -47,6 +47,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -81,6 +82,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.citali.needle.engine.ChatController
 import dev.citali.needle.engine.NeedleEngine
@@ -91,6 +95,7 @@ import dev.citali.needle.pilot.agent.CommandPlanner
 import dev.citali.needle.pilot.agent.Plan
 import dev.citali.needle.pilot.data.AppInventory
 import dev.citali.needle.pilot.data.SecureStore
+import dev.citali.needle.tools.DevicePermissions
 import dev.citali.needle.ui.theme.NeedleTheme
 import dev.citali.needle.ui.theme.WahariIcons
 import dev.citali.needle.ui.theme.WahariLayout
@@ -138,6 +143,23 @@ fun ChatScreen(
     val messages by ChatController.messages.collectAsStateWithLifecycle()
     val busy by ChatController.busy.collectAsStateWithLifecycle()
     val agentState by AgentEngine.state.collectAsStateWithLifecycle()
+    // Approve stays enabled while the OS setting is on even if the service is
+    // still binding (cold start, swipe-away): AgentEngine waits for the bind.
+    // Cached and refreshed on resume so typing does not hit Settings.Secure.
+    var a11yOsOn by remember { mutableStateOf(DevicePermissions.isAccessibilityServiceEnabled(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                a11yOsOn = DevicePermissions.isAccessibilityServiceEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(agentState.serviceConnected) {
+        if (agentState.serviceConnected) a11yOsOn = true
+    }
     val showReasoning = NeedlePrefs.showReasoning(context)
 
     var field by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
@@ -379,7 +401,7 @@ fun ChatScreen(
                             entry.plan?.let { plan ->
                                 PlanCard(
                                     plan = plan,
-                                    accessibilityOn = agentState.serviceConnected,
+                                    accessibilityOn = agentState.serviceConnected || a11yOsOn,
                                     onOpenAccessibility = { openAccessibilitySettings(context) },
                                     onApproveAndRun = { AgentEngine.start(context, plan) },
                                     onDiscard = { automateEntries.remove(entry) },

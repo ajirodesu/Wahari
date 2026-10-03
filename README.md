@@ -150,6 +150,24 @@ of the APK signing certificate, with a tap-to-copy button. Compare it with
 A build whose runtime certificate differs from the pinned value reports `MISMATCH` — treat it
 as untrusted.
 
+**Make accessibility permanent.** Android never lets an app flip its own accessibility switch,
+so Wahari can only restore it itself with the signature-level `WRITE_SECURE_SETTINGS` permission,
+granted once from a computer (or via Shizuku / root):
+
+```bash
+adb shell pm grant com.ajirodesu.wahari android.permission.WRITE_SECURE_SETTINGS
+```
+
+With the grant, the in-app *Keep screen automation on* switch (Settings, on by default after setup)
+restores the service after reboot, app updates and OEM cleanups; without it, re-enable the service
+by hand when Android switches it off. The switch is the only thing that turns automation off —
+observed system state never overrides it. Two notes:
+
+- On Android 13+, sideloaded apps show a greyed-out toggle until you open App info → ⋮ →
+  *Allow restricted settings* (once).
+- On Xiaomi / Oppo / Vivo / Huawei, also allow autostart and disable battery restrictions for
+  Wahari, or the system may keep killing the service.
+
 ## What a build does
 
 Each run of the workflow (`.github/workflows/build-apk.yml`) does this, in order:

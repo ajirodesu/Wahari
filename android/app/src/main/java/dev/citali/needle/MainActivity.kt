@@ -85,6 +85,9 @@ class MainActivity : FragmentActivity() {
         super.onStart()
         ActivityBridges.photoCapture = { capturePhoto() }
         ActivityBridges.biometricCheck = { reason -> authenticate(reason) }
+        // Re-apply keep-enabled on every foregrounding (swipe-away, reboot,
+        // OEM cleanup). No-op without the secure-settings grant or flag.
+        runCatching { dev.citali.needle.tools.AccessibilityAutoEnable.ensure(this) }
         NeedleEngine.refresh(this)
     }
 

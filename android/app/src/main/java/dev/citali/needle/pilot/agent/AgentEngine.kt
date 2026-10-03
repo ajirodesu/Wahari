@@ -5,6 +5,8 @@ import dev.citali.needle.pilot.accessibility.NeedleAccessibilityService
 import dev.citali.needle.pilot.data.AppInventory
 import dev.citali.needle.pilot.data.HistoryStore
 import dev.citali.needle.pilot.data.SecureStore
+import dev.citali.needle.tools.AccessibilityAutoEnable
+import dev.citali.needle.tools.AccessibilityStatus
 import dev.citali.needle.engine.EngineBrain
 import dev.citali.needle.pilot.data.SettingsStore
 import kotlinx.coroutines.CompletableDeferred
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.coroutineContext
 
@@ -187,11 +190,41 @@ object AgentEngine {
                     delay(250)
                 }
 
-                val service = NeedleAccessibilityService.instance
+                var service = NeedleAccessibilityService.instance
                 if (service == null) {
-                    finish(Phase.BLOCKED, "Enable Wahari automation in Accessibility settings, then run the task again.")
-                    record(context, plan.command, "blocked")
-                    return
+                    // The OS setting can be on while the service is still
+                    // binding (cold start, swipe-away, reboot, OEM kill). Wait
+                    // for the bind before declaring the run blocked.
+                    val osEnabled = AccessibilityStatus.osEnabled(context)
+                    if (osEnabled) {
+                        log(LogLevel.INFO, "Accessibility is on; waiting for the service to connect…")
+                        if (!AccessibilityStatus.awaitBound(5_000L) &&
+                            AccessibilityAutoEnable.hasSecurePermission(context)
+                        ) {
+                            // Setting on, grant held, still unbound: the binding
+                            // is stuck. Toggling the entry forces a rebind.
+                            // Off the main thread: rebind briefly sleeps.
+                            log(LogLevel.INFO, "Forcing a service rebind…")
+                            val rebound = withContext(Dispatchers.IO) {
+                                AccessibilityAutoEnable.rebind(context)
+                            }
+                            if (rebound) AccessibilityStatus.awaitBound(5_000L)
+                        }
+                        service = NeedleAccessibilityService.instance
+                    }
+                    if (service == null) {
+                        finish(
+                            Phase.BLOCKED,
+                            if (osEnabled) {
+                                "The automation service is enabled but would not start. " +
+                                    "Re-enable it in Accessibility settings, then run the task again."
+                            } else {
+                                "Enable Wahari automation in Accessibility settings, then run the task again."
+                            },
+                        )
+                        record(context, plan.command, "blocked")
+                        return
+                    }
                 }
 
                 val snapshot = runCatching { service.captureSnapshot(settings.redactSensitiveValues) }

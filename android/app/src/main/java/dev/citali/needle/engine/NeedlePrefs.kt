@@ -12,6 +12,7 @@ object NeedlePrefs {
     private const val KEY_TELEGRAM_ENABLED = "telegram_enabled"
     private const val KEY_TELEGRAM_ADMIN_IDS = "telegram_admin_ids"
     private const val KEY_A11Y_SETUP = "accessibility_setup_completed"
+    private const val KEY_A11Y_KEEP = "a11y_keep_enabled"
     private const val KEY_MAX_TOKENS = "max_new_tokens"
     private const val KEY_SHOW_REASONING = "show_reasoning"
     private const val KEY_AGENT_MODE = "agent_mode"
@@ -111,6 +112,27 @@ object NeedlePrefs {
 
     fun setAccessibilitySetupCompleted(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_A11Y_SETUP, value).apply()
+        if (value) {
+            // First completion opts into keep-enabled; only the in-app switch
+            // may turn it back off.
+            setA11yKeepEnabled(context, true)
+        }
+    }
+
+    /**
+     * User intent: the accessibility service must stay enabled. Defaults to
+     * true once setup has finished; only the in-app switch may change it —
+     * observed OS state must never overwrite it. Written with commit() because
+     * boot receivers and observers act on it before any UI exists.
+     */
+    fun a11yKeepEnabled(context: Context): Boolean {
+        val prefs = prefs(context)
+        if (prefs.contains(KEY_A11Y_KEEP)) return prefs.getBoolean(KEY_A11Y_KEEP, true)
+        return accessibilitySetupCompleted(context)
+    }
+
+    fun setA11yKeepEnabled(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_A11Y_KEEP, value).commit()
     }
 
     /**

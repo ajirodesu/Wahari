@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import dev.citali.needle.pilot.accessibility.NeedleAccessibilityService
 import dev.citali.needle.pilot.agent.AgentEngine
 import dev.citali.needle.pilot.agent.Plan
 import dev.citali.needle.tools.DevicePermissions
@@ -189,7 +188,10 @@ fun handOffToTaskPilot(context: Context, command: String) {
     }
 }
 
-fun accessibilityOn(): Boolean = NeedleAccessibilityService.isConnected()
+/** Unified check: the OS setting counts even while the service is still binding. */
+fun accessibilityOn(context: Context): Boolean =
+    dev.citali.needle.tools.AccessibilityStatus.current(context) !=
+        dev.citali.needle.tools.AccessibilityStatus.Status.DISABLED
 
 fun openAccessibilitySettings(context: Context) {
     DevicePermissions.openAccessibilitySettings(context)

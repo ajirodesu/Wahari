@@ -60,12 +60,14 @@ import dev.citali.needle.engine.ModelRepository
 import dev.citali.needle.engine.NeedleEngine
 import dev.citali.needle.engine.NeedlePrefs
 import dev.citali.needle.pilot.data.HistoryStore
+import dev.citali.needle.pilot.accessibility.NeedleAccessibilityService
 import dev.citali.needle.pilot.data.PilotSettings
 import dev.citali.needle.pilot.data.SecureStore
 import dev.citali.needle.pilot.data.SettingsStore
 import dev.citali.needle.remote.NeedleRemoteService
 import dev.citali.needle.remote.TelegramBridge
 import dev.citali.needle.tools.AccessibilityState
+import dev.citali.needle.tools.AccessibilityAutoEnable
 import dev.citali.needle.tools.ActivityBridges
 import dev.citali.needle.tools.DevicePermissions
 import dev.citali.needle.tools.PhoneTools
@@ -120,6 +122,12 @@ fun SettingsContent(modifier: Modifier = Modifier) {
     var a11ySetupDone by remember {
         mutableStateOf(NeedlePrefs.accessibilitySetupCompleted(context))
     }
+    // The only switch that may turn automation off, plus the permanent-grant
+    // state (WRITE_SECURE_SETTINGS via adb). Both re-queried on resume.
+    var keepA11y by remember { mutableStateOf(NeedlePrefs.a11yKeepEnabled(context)) }
+    var secureGranted by remember {
+        mutableStateOf(AccessibilityAutoEnable.hasSecurePermission(context))
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -130,6 +138,8 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                     NeedlePrefs.setAccessibilitySetupCompleted(context, true)
                 }
                 a11ySetupDone = NeedlePrefs.accessibilitySetupCompleted(context)
+                keepA11y = NeedlePrefs.a11yKeepEnabled(context)
+                secureGranted = AccessibilityAutoEnable.hasSecurePermission(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -386,6 +396,61 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                     } else {
                         "Enable the service above to use screen automation."
                     },
+                    style = WahariTypography.sectionSubtitle,
+                )
+            }
+            ToggleRow(
+                title = "Keep screen automation on",
+                subtitle = "The only switch that turns automation off. Restores it after reboot, " +
+                    "updates and system cleanups.",
+                checked = keepA11y,
+                onCheckedChange = { enabled ->
+                    keepA11y = enabled
+                    NeedlePrefs.setA11yKeepEnabled(context, enabled)
+                    scope.launch(Dispatchers.IO) {
+                        if (enabled) {
+                            AccessibilityAutoEnable.ensure(context)
+                        } else if (!AccessibilityAutoEnable.remove(context)) {
+                            // No secure-settings grant: ask the bound service to
+                            // disable itself; otherwise the user flips the
+                            // system toggle by hand (deep link above).
+                            NeedleAccessibilityService.instance?.let { service ->
+                                runCatching { service.disableSelf() }
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            a11yServiceOn = DevicePermissions.isAccessibilityServiceEnabled(context)
+                        }
+                    }
+                },
+            )
+            KeyValue(
+                "Permanent grant",
+                if (secureGranted) "granted — restores itself" else "not granted",
+            )
+            if (!secureGranted) {
+                Text(
+                    "Staying on across reboot needs one command from a computer, once. " +
+                        "Connect USB debugging and run:",
+                    style = WahariTypography.sectionSubtitle,
+                )
+                Text(
+                    AccessibilityAutoEnable.ADB_COMMAND,
+                    style = WahariTypography.sectionSubtitle.copy(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    ),
+                )
+                ActionRow {
+                    SecondaryButton(
+                        text = "Copy adb command",
+                        onClick = { copyToClipboard(context, AccessibilityAutoEnable.ADB_COMMAND) },
+                    )
+                }
+                Text(
+                    "Without it, Android may still switch the service off (reboot, battery " +
+                        "saver, OEM cleanup) and you re-enable it by hand. " +
+                        "On Android 13+, if the system toggle is greyed out, open App info → ⋮ → " +
+                        "\"Allow restricted settings\" first (required once for sideloaded apps).",
                     style = WahariTypography.sectionSubtitle,
                 )
             }

@@ -26,6 +26,13 @@
         android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Lets the app itself restore its accessibility switch after reboot or an
+         OEM cleanup, once the user grants it via adb/Shizuku/root. Normal apps
+         cannot hold this; without the grant every call using it is a no-op. -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Resolving "open WhatsApp" against what is really installed. Wahari only
          reads the launchable-app list; it never installs, removes or modifies
@@ -68,6 +75,7 @@
     </queries>
 
     <application
+        android:name=".WahariApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -105,6 +113,18 @@
             android:name=".remote.NeedleRemoteService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Re-applies keep-enabled accessibility after reboot or app update. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

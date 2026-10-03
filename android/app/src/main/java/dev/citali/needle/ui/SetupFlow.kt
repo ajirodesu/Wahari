@@ -54,6 +54,7 @@ import dev.citali.needle.engine.ModelRepository
 import dev.citali.needle.engine.NeedleEngine
 import dev.citali.needle.engine.NeedlePrefs
 import dev.citali.needle.pilot.accessibility.NeedleAccessibilityService
+import dev.citali.needle.tools.AccessibilityAutoEnable
 import dev.citali.needle.tools.DevicePermissions
 import dev.citali.needle.ui.theme.NeedleTheme
 import dev.citali.needle.ui.theme.WahariLayout
@@ -420,6 +421,18 @@ private fun AccessibilityStep(
     onSkip: () -> Unit,
 ) {
     val context = LocalContext.current
+    // Auto-detects the adb grant when the user returns here.
+    var granted by remember { mutableStateOf(AccessibilityAutoEnable.hasSecurePermission(context)) }
+    val stepLifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(stepLifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                granted = AccessibilityAutoEnable.hasSecurePermission(context)
+            }
+        }
+        stepLifecycle.addObserver(observer)
+        onDispose { stepLifecycle.removeObserver(observer) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Screen automation", style = WahariTypography.pageTitle)
         Section(
@@ -451,6 +464,37 @@ private fun AccessibilityStep(
                 "This opens the real Android settings. Returning here re-checks the service automatically.",
                 style = WahariTypography.sectionSubtitle,
             )
+        }
+        Section(
+            title = "Make it permanent (once)",
+            subtitle = "Otherwise Android may switch the service off again on reboot or cleanup.",
+        ) {
+            if (granted) {
+                KeyValue("Permanent grant", "granted — automation restores itself")
+            } else {
+                Text(
+                    "From a computer with USB debugging, run once:",
+                    style = WahariTypography.sectionSubtitle,
+                )
+                Text(
+                    AccessibilityAutoEnable.ADB_COMMAND,
+                    style = WahariTypography.sectionSubtitle.copy(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    ),
+                )
+                ActionRow {
+                    SecondaryButton(
+                        text = "Copy adb command",
+                        onClick = { copyToClipboard(context, AccessibilityAutoEnable.ADB_COMMAND) },
+                    )
+                }
+                Text(
+                    "Coming back here detects the grant automatically. " +
+                        "On Android 13+, if the system toggle is greyed out, open App info → ⋮ → " +
+                        "\"Allow restricted settings\" first.",
+                    style = WahariTypography.sectionSubtitle,
+                )
+            }
         }
         ActionRow {
             PrimaryButton(text = "Continue", enabled = enabled, onClick = onContinue)

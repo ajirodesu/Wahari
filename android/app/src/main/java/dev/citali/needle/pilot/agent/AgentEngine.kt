@@ -169,6 +169,7 @@ object AgentEngine {
         var consecutiveFailures = 0
         var lastSignature: String? = null
         var stuckCount = 0
+        var verifyMisses = 0
         var highRiskApprovedFor: String? = null
 
         if (settings.showOverlay) {
@@ -218,6 +219,33 @@ object AgentEngine {
 
                 when (action) {
                     is Action.Complete -> {
+                        // The "Verify" step must really verify: for app-launch
+                        // intents, success means the target package is in the
+                        // foreground — not Wahari, not the launcher.
+                        val expectedPackage = when (val intent = plan.intent) {
+                            is TaskIntent.OpenApp -> intent.packageName
+                            is TaskIntent.OpenAppAndSearch -> intent.packageName
+                            else -> null
+                        }
+                        if (expectedPackage != null &&
+                            !snapshot.packageName.equals(expectedPackage, ignoreCase = true)
+                        ) {
+                            verifyMisses++
+                            if (verifyMisses > 4) {
+                                val label = when (val intent = plan.intent) {
+                                    is TaskIntent.OpenApp -> intent.label
+                                    is TaskIntent.OpenAppAndSearch -> intent.label
+                                    else -> expectedPackage
+                                }
+                                log(LogLevel.ERROR, "$label did not come to the foreground.")
+                                finish(Phase.FAILED, "$label did not come to the foreground.")
+                                record(context, plan.command, "failed")
+                                return
+                            }
+                            log(LogLevel.WARN, "Verify: ${snapshot.packageName ?: "nothing"} is in front; waiting for $expectedPackage ($verifyMisses/4).")
+                            delay(900)
+                            continue
+                        }
                         log(LogLevel.INFO, "Done: ${action.summary}")
                         finish(Phase.COMPLETED, action.summary)
                         record(context, plan.command, "completed")
@@ -357,7 +385,19 @@ object AgentEngine {
         recent: List<String>,
         deterministic: DeterministicExecutor,
     ): Action {
-        // 1. The on-device Needle model decides the next action when its weights
+        val intent = plan.intent
+        // 1. Structured intents already have a deterministic routine that can
+        //    just launch the app — no model needed. Only when the routine must
+        //    ask the user (it cannot find a control) is the model consulted.
+        var deferredAsk: Action.AskUser? = null
+        if (intent !is TaskIntent.Generic) {
+            when (val direct = deterministic.next(snapshot)) {
+                is Action.AskUser -> deferredAsk = direct
+                else -> return direct
+            }
+        }
+
+        // 2. The on-device Needle model decides the next action when its weights
         //    are loaded. Everything it proposes still goes through SafetyPolicy.
         if (settings.useOnDeviceModel && EngineBrain.isReady()) {
             if (!localAnnounced) {
@@ -365,6 +405,18 @@ object AgentEngine {
                 log(LogLevel.INFO, "Thinking on-device with Needle ${EngineBrain.engineVersion()}…")
             }
             val result = EngineBrain.proposeAction(context, plan, snapshot, recent)
+            val engineError = result.exceptionOrNull()
+            if (engineError != null) {
+                // The engine itself failed (not a parse miss): retrying the
+                // identical call is pointless, so stop here with its real
+                // message instead of burning attempts.
+                val reason = "On-device engine error: ${engineError.message}"
+                log(LogLevel.ERROR, reason)
+                deferredAsk?.let { return it }
+                return Action.Fail(
+                    "$reason. Try a shorter command, or configure an AI provider in Settings."
+                )
+            }
             val action = result.getOrNull()?.let { raw ->
                 log(LogLevel.MODEL, "Needle: ${raw.trim().replace('\n', ' ').take(160)}")
                 LlmClient.parseAction(raw)
@@ -374,8 +426,9 @@ object AgentEngine {
                 return action
             }
             localFailures++
-            result.exceptionOrNull()?.message?.let { log(LogLevel.WARN, "On-device model: $it") }
+            log(LogLevel.WARN, "On-device reply could not be used (attempt $localFailures/3).")
             if (localFailures >= 3) {
+                deferredAsk?.let { return it }
                 return Action.Fail(
                     "The on-device model replied three times in a form the app could not use. " +
                         "Try a shorter command, or configure an AI provider in Settings."
@@ -455,6 +508,7 @@ object AgentEngine {
             // look like a working app that only understood the examples -- stop
             // and say what went wrong.
             if (aiFailures >= 3) {
+                deferredAsk?.let { return it }
                 return Action.Fail(
                     "The AI provider is not responding correctly after 3 attempts. " +
                         "Check the base URL, model name, and API key in Settings."
@@ -465,13 +519,15 @@ object AgentEngine {
 
         // No provider configured. The built-in executor only covers a few known
         // routines, so be explicit rather than appearing to fail at random.
-        if (plan.intent is TaskIntent.Generic) {
+        if (intent is TaskIntent.Generic) {
             return Action.Fail(
                 "This task needs an AI provider. Add an OpenAI-compatible base URL, " +
                     "model, and API key in Settings, then run it again."
             )
         }
-        return deterministic.next(snapshot)
+        // Reuse the routine's answer from above when there is one: calling
+        // next() a second time would advance its one-shot state twice.
+        return deferredAsk ?: deterministic.next(snapshot)
     }
 
     // ---- Helpers ----------------------------------------------------------

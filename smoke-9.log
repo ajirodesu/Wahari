@@ -1,0 +1,83 @@
+++ head -n 1
+++ ls apk/Wahari-0.0.9-c123c54221cf61caa48b55a4734bae98432ced89.apk
++ apk=apk/Wahari-0.0.9-c123c54221cf61caa48b55a4734bae98432ced89.apk
++ echo 'Artifact: apk/Wahari-0.0.9-c123c54221cf61caa48b55a4734bae98432ced89.apk'
+Artifact: apk/Wahari-0.0.9-c123c54221cf61caa48b55a4734bae98432ced89.apk
++ echo '---- native code in the APK ----'
+---- native code in the APK ----
++ unzip -l apk/Wahari-0.0.9-c123c54221cf61caa48b55a4734bae98432ced89.apk 'lib/*'
+Archive:  apk/Wahari-0.0.9-c123c54221cf61caa48b55a4734bae98432ced89.apk
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+    10096  1981-01-01 01:01   lib/arm64-v8a/libandroidx.graphics.path.so
+  1292904  1981-01-01 01:01   lib/arm64-v8a/libc++_shared.so
+     7112  1981-01-01 01:01   lib/arm64-v8a/libdatastore_shared_counter.so
+  1180992  1981-01-01 01:01   lib/arm64-v8a/libneedlejni.so
+     7252  1981-01-01 01:01   lib/armeabi-v7a/libandroidx.graphics.path.so
+   872872  1981-01-01 01:01   lib/armeabi-v7a/libc++_shared.so
+     4416  1981-01-01 01:01   lib/armeabi-v7a/libdatastore_shared_counter.so
+     3812  1981-01-01 01:01   lib/armeabi-v7a/libneedlejni.so
+     9284  1981-01-01 01:01   lib/x86/libandroidx.graphics.path.so
+  1254988  1981-01-01 01:01   lib/x86/libc++_shared.so
+     5148  1981-01-01 01:01   lib/x86/libdatastore_shared_counter.so
+     4448  1981-01-01 01:01   lib/x86/libneedlejni.so
+    10760  1981-01-01 01:01   lib/x86_64/libandroidx.graphics.path.so
+  1252080  1981-01-01 01:01   lib/x86_64/libc++_shared.so
+     6224  1981-01-01 01:01   lib/x86_64/libdatastore_shared_counter.so
+     5504  1981-01-01 01:01   lib/x86_64/libneedlejni.so
+---------                     -------
+  5927892                     16 files
++ echo '---- device ----'
+---- device ----
++ adb shell getprop ro.product.cpu.abi
+x86_64
++ adb shell getprop ro.build.version.release
+14
++ echo '---- install ----'
+---- install ----
++ adb install -r -g apk/Wahari-0.0.9-c123c54221cf61caa48b55a4734bae98432ced89.apk
+Performing Streamed Install
+Success
++ echo '---- launch ----'
+---- launch ----
++ adb shell am start -W -n com.ajirodesu.wahari/dev.citali.needle.MainActivity
+Starting: Intent { cmp=com.ajirodesu.wahari/dev.citali.needle.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: com.ajirodesu.wahari/dev.citali.needle.MainActivity
+TotalTime: 2249
+WaitTime: 2260
+Complete
++ sleep 20
++ echo '---- process ----'
+---- process ----
+++ adb shell pidof com.ajirodesu.wahari
+++ tr -d '\r'
++ pid=2911
++ '[' -z 2911 ']'
++ echo 'Needle is running as pid 2911'
+Needle is running as pid 2911
++ echo '---- crash buffer ----'
+---- crash buffer ----
++ adb logcat -d -b crash
++ grep -q com.ajirodesu.wahari
++ echo '(crash buffer is clean)'
+(crash buffer is clean)
++ echo '---- top activity ----'
+---- top activity ----
++ adb shell dumpsys activity activities
++ grep -m1 topResumedActivity
+    topResumedActivity=ActivityRecord{94acb34 u0 com.ajirodesu.wahari/dev.citali.needle.MainActivity t8}
++ grep -q com.ajirodesu.wahari
++ adb shell dumpsys activity activities
++ grep -m1 topResumedActivity
++ echo '---- errors the app logged ----'
+---- errors the app logged ----
++ adb logcat -d -v brief '*:E'
++ grep -i com.ajirodesu.wahari
+E/ActivityTaskManager(  521): setVisibility=true while transition is not collecting or finishing ActivityRecord{94acb34 u0 com.ajirodesu.wahari/dev.citali.needle.MainActivity t8} caller=com.android.server.wm.ActivityRecord.setVisibility:5287 com.android.server.wm.EnsureActivitiesVisibleHelper.makeVisibleAndRestartIfNeeded:259 com.android.server.wm.EnsureActivitiesVisibleHelper.setActivityVisibilityState:196 com.android.server.wm.EnsureActivitiesVisibleHelper.process:144 com.android.server.wm.TaskFragment.updateActivityVisibilities:1157 com.android.server.wm.Task.lambda$ensureActivitiesVisible$20:4878 com.android.server.wm.Task.$r8$lambda$glAS06h6u0gde7lZWW7SuxTbP1w:0 com.android.server.wm.Task$$ExternalSyntheticLambda16.accept:0 
++ echo '---- screenshot ----'
+---- screenshot ----
++ adb exec-out screencap -p
++ ls -la screenshot.png
+-rw-r--r-- 1 runner runner 104658 Oct  3 02:58 screenshot.png

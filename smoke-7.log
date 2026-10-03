@@ -1,0 +1,250 @@
+++ ls apk/Wahari-0.0.7-9d3af4525188d1196977bc2fedd28185b7a1e56f.apk
+++ head -n 1
++ apk=apk/Wahari-0.0.7-9d3af4525188d1196977bc2fedd28185b7a1e56f.apk
++ echo 'Artifact: apk/Wahari-0.0.7-9d3af4525188d1196977bc2fedd28185b7a1e56f.apk'
+Artifact: apk/Wahari-0.0.7-9d3af4525188d1196977bc2fedd28185b7a1e56f.apk
++ echo '---- native code in the APK ----'
+---- native code in the APK ----
++ unzip -l apk/Wahari-0.0.7-9d3af4525188d1196977bc2fedd28185b7a1e56f.apk 'lib/*'
+Archive:  apk/Wahari-0.0.7-9d3af4525188d1196977bc2fedd28185b7a1e56f.apk
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+    10096  1981-01-01 01:01   lib/arm64-v8a/libandroidx.graphics.path.so
+  1292904  1981-01-01 01:01   lib/arm64-v8a/libc++_shared.so
+     7112  1981-01-01 01:01   lib/arm64-v8a/libdatastore_shared_counter.so
+  1180152  1981-01-01 01:01   lib/arm64-v8a/libneedlejni.so
+    10760  1981-01-01 01:01   lib/x86_64/libandroidx.graphics.path.so
+  1252080  1981-01-01 01:01   lib/x86_64/libc++_shared.so
+     6224  1981-01-01 01:01   lib/x86_64/libdatastore_shared_counter.so
+     5376  1981-01-01 01:01   lib/x86_64/libneedlejni.so
+---------                     -------
+  3764704                     8 files
++ echo '---- device ----'
+---- device ----
++ adb shell getprop ro.product.cpu.abi
+x86_64
++ adb shell getprop ro.build.version.release
+14
++ echo '---- install ----'
+---- install ----
++ adb install -r -g apk/Wahari-0.0.7-9d3af4525188d1196977bc2fedd28185b7a1e56f.apk
+Performing Streamed Install
+Success
++ echo '---- launch ----'
+---- launch ----
++ adb shell am start -W -n com.ajirodesu.wahari/.MainActivity
+Starting: Intent { cmp=com.ajirodesu.wahari/.MainActivity }
+Error type 3
+Error: Activity class {com.ajirodesu.wahari/com.ajirodesu.wahari.MainActivity} does not exist.
++ sleep 20
++ echo '---- process ----'
+---- process ----
+++ tr -d '\r'
+++ adb shell pidof com.ajirodesu.wahari
++ pid=
++ '[' -z '' ']'
++ echo '::error::Wahari is not running after launch'
+::error::Wahari is not running after launch
++ adb logcat -d -v brief
++ tail -n 200
+W/system_server(  522): Long monitor contention with owner ActivityManager (552) at void com.android.server.am.BroadcastQueueModernImpl.checkPendingColdStartValidity()(BroadcastQueueModernImpl.java:551) waiters=1 in android.content.Intent com.android.server.am.ActivityManagerService.registerReceiverWithFeature(android.app.IApplicationThread, java.lang.String, java.lang.String, java.lang.String, android.content.IIntentReceiver, android.content.IntentFilter, java.lang.String, int, int) for 181ms
+D/CompatibilityChangeReporter(  522): Compat change id reported: 261072174; UID 10142; state: DISABLED
+D/BoundBrokerSvc( 1498): onUnbind: Intent { act=com.google.android.gms.findmydevice.spot.service.management.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsApiService }
+W/NearbyMessages( 1415): Runnable[subscribe] was delayed for 00:02.744 [CONTEXT service_id=62 ]
+I/Fitness ( 1415): FitCleanupIntentOperation received Intent android.intent.action.PACKAGE_CHANGED [CONTEXT service_id=17 ]
+D/BoundBrokerSvc( 1498): onUnbind: Intent { act=com.google.android.gms.findmydevice.spot.service.locationreport.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsApiService }
+I/Fitness ( 1415): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+D/CompatibilityChangeReporter(  522): Compat change id reported: 261072174; UID 1000; state: ENABLED
+D/CompatibilityChangeReporter(  522): Compat change id reported: 261072174; UID 10118; state: ENABLED
+I/resolv  (  335): GetAddrInfoHandler::run: {100 786532 100 983140 10131 0}
+I/resolv  (  335): GetAddrInfoHandler::run: {100 786532 100 983140 10131 0}
+I/resolv  (  335): res_nmkquery: (QUERY, IN, A)
+I/resolv  (  335): res_nmkquery: (QUERY, IN, AAAA)
+I/resolv  (  335): res_nmkquery: (QUERY, IN, A)
+I/resolv  (  335): resolv_cache_lookup: FOUND IN CACHE entry=0x73584608b630
+I/resolv  (  335): doQuery: rcode=0, ancount=8, return value=164
+I/NearbyDiscovery( 1415): DiscoveryNearbyMessagesManager failed to background subscribe [CONTEXT service_id=265 ]
+I/NearbyDiscovery( 1415): java.util.concurrent.TimeoutException: Timed out waiting for Task
+I/NearbyDiscovery( 1415): 	at cfsz.o(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+I/NearbyDiscovery( 1415): 	at bbhk.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):25)
+I/NearbyDiscovery( 1415): 	at bbhe.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):3)
+I/NearbyDiscovery( 1415): 	at dtjy.handleMessage(:com.google.android.gms@231818047@23.18.18 (190800-535401451):5)
+I/NearbyDiscovery( 1415): 	at android.os.Handler.dispatchMessage(Handler.java:106)
+I/NearbyDiscovery( 1415): 	at avye.ll(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+I/NearbyDiscovery( 1415): 	at avye.dispatchMessage(:com.google.android.gms@231818047@23.18.18 (190800-535401451):14)
+I/NearbyDiscovery( 1415): 	at android.os.Looper.loopOnce(Looper.java:205)
+I/NearbyDiscovery( 1415): 	at android.os.Looper.loop(Looper.java:294)
+I/NearbyDiscovery( 1415): 	at android.os.HandlerThread.run(HandlerThread.java:67)
+I/resolv  (  335): res_nsend: used send_dg 264 terrno: 0
+I/resolv  (  335): doQuery: rcode=0, ancount=8, return value=264
+W/NearbyDiscovery( 1415): Runnable[updateUi] was delayed for 00:02.012 [CONTEXT service_id=265 ]
+I/Nearby  ( 1415): is blocked device type false, isAuto=false, isIot=false, isLatchsky=false, isChinaWearable=false, isTv=false, isWearable=false (supportWearOs=false), isChromeOsDevice=false (supportChromeOs=false) [CONTEXT service_id=49 ]
+I/resolv  (  335): res_nmkquery: (QUERY, IN, AAAA)
+I/resolv  (  335): resolv_cache_lookup: FOUND IN CACHE entry=0x7356d6085e10
+I/resolv  (  335): doQuery: rcode=0, ancount=8, return value=260
+D/StylusManager(  836): Stylus InputDevice changed: 11 virtio_input_multi_touch_8
+D/TrafficStats( 1498): tagSocket(135) with statsTag=0x30001803, statsUid=-1
+E/BpfHandler(  335): Unsupported protocol: 1
+I/TrafficStats( 1498): tagSocketFd(135, 805312515, -1) failed with errno-93
+I/resolv  (  335): res_nsend: used send_dg 168 terrno: 0
+I/resolv  (  335): doQuery: rcode=0, ancount=8, return value=168
+D/TrafficStats( 1415): tagSocket(180) with statsTag=0x30000401, statsUid=10131
+W/Conscrypt( 1415): Could not set socket write timeout: java.net.SocketException: Socket closed
+W/Conscrypt( 1415): 	at com.google.android.gms.org.conscrypt.Platform.setSocketWriteTimeout(:com.google.android.gms@231818047@23.18.18 (190800-535401451):2)
+W/Conscrypt( 1415): 	at com.google.android.gms.org.conscrypt.ConscryptFileDescriptorSocket.setSoWriteTimeout(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.gestures.GestureNavigationSettingsAssistController
+V/SettingsSearchProvider( 1049): com.android.settings.display.NightDisplaySettings$1@7602bce tried to add an empty non-indexable key
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.applications.specialaccess.notificationaccess.NotificationAccessScreenPreferenceController
+E/DeviceStateAutoRotHelpr( 1049): Mismatch between number of device states and device states descriptions.
+D/StylusManager(  836): Stylus InputDevice changed: 13 virtio_input_multi_touch_10
+W/MetricsFeatureProvider( 4277): Disabled westworld logs writing!!!
+V/OnDeviceRecognitionPreferenceController( 1049): Recognition service in the same package as the default on-device recognizer with settings activity: com.google.android.as/com.google.android.apps.miphone.aiai.speech.languagepacks.settings.ui.SettingsActivity.
+V/OnDeviceRecognitionPreferenceController( 1049): Recognition service not in the same package as the default on-device recognizer: com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService.
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.language.PhoneLanguagePreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.applications.appinfo.ManageAppLocalePreferenceController
+W/PrefCtrlListHelper( 1049): Cannot instantiate controller from reflection: com.android.settings.applications.appinfo.ManageAppLocalePreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.regionalpreferences.RegionalPreferencesController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.language.OnDeviceRecognitionPreferenceController
+W/PrefCtrlListHelper( 1049): on_device_recognition_settings already has a controller
+D/StylusManager(  836): Stylus InputDevice changed: 10 virtio_input_multi_touch_7
+I/TetheringManager( 1049): registerTetheringEventCallback:com.android.settings
+W/libc    ( 1049): Access denied finding property "ro.vendor.aware_available"
+V/SettingsSearchProvider( 1049): com.google.android.settings.aware.TapGestureSettings$1@25e6d18 tried to add an empty non-indexable key
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.gestures.DoubleTapScreenPreferenceController
+V/SettingsSearchProvider( 1049): com.android.settings.datetime.timezone.TimeZoneSettings$1@faa60e2 tried to add an empty non-indexable key
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.applications.specialaccess.vrlistener.VrListenerScreenPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.display.darkmode.DarkModeActivationPreferenceController
+W/ChimeraUtils( 1415): Module com.google.android.gms.nearby_en missing resource null(0)
+D/StylusManager(  836): Stylus InputDevice changed: 9 virtio_input_multi_touch_6
+I/NearbyDiscovery( 1415): DiscoveryController, showNotification, itemSize=0 [CONTEXT service_id=265 ]
+W/ChimeraUtils( 1415): Module com.google.android.gms.nearby_en missing resource null(0)
+W/ContentProviderHelper(  522): Slow operation: 88ms so far, now at getContentProviderImpl: after updateOomAdj
+W/ContentProviderHelper(  522): Slow operation: 88ms so far, now at getContentProviderImpl: done!
+E/DeviceStateAutoRotHelpr( 1049): Mismatch between number of device states and device states descriptions.
+I/InputReader(  522): Reconfiguring input devices, changes=KEYBOARD_LAYOUTS
+W/Conscrypt( 1415): Could not set socket write timeout: java.net.SocketException: Socket closed
+W/Conscrypt( 1415): 	at com.google.android.gms.org.conscrypt.Platform.setSocketWriteTimeout(:com.google.android.gms@231818047@23.18.18 (190800-535401451):2)
+W/Conscrypt( 1415): 	at com.google.android.gms.org.conscrypt.ConscryptFileDescriptorSocket.setSoWriteTimeout(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.display.TwilightLocationPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.display.darkmode.DarkModeScheduleSelectorController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.display.darkmode.DarkModeCustomBedtimePreferenceController
+I/NearbyDiscovery( 1415): Show notifications: 0 total, no changes since last shown, no-op. [CONTEXT service_id=265 ]
+I/NearbyShared( 1415): FastPairSlice: enableBindServiceForDiscoveryItem called, isBind = false
+W/SettingsPrefController( 1049): Skipping updateNonIndexableKeys, key already in list. com.android.settings.display.darkmode.DarkModeCustomBedtimePreferenceController@162d6eb
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.regionalpreferences.TemperatureUnitCategoryController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.security.trustagent.TrustAgentsPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.PrimaryMonoPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.CaptioningLocalePreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.CaptioningFooterPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.AccessibilityButtonPreviewPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.AccessibilityButtonLocationPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.AccessibilityButtonGesturePreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.FloatingMenuSizePreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.FloatingMenuFadePreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.FloatingMenuTransparencyPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.accessibility.AccessibilityButtonFooterPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.gestures.DoubleTwistPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.gestures.LongPressPowerIllustrationPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.gestures.LongPressPowerForPowerMenuPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.gestures.LongPressPowerForAssistantPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.gestures.LongPressPowerSensitivityPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.gestures.LongPressPowerFooterPreferenceController
+D/PrefCtrlListHelper( 1049): Could not find Context-only controller for pref: com.android.settings.slices.SlicePreferenceController
+D/CompatibilityChangeReporter( 1049): Compat change id reported: 263076149; UID 1000; state: ENABLED
+D/ControlsListingControllerImpl(  836): ServiceConfig reloaded, count: 0
+D/StylusManager(  836): Stylus InputDevice changed: 8 virtio_input_multi_touch_5
+D/StylusManager(  836): Stylus InputDevice changed: 5 virtio_input_multi_touch_2
+I/PermissionControllerServiceImpl(  838): Updating user sensitive for uid 10119
+D/CompatibilityChangeReporter(  522): Compat change id reported: 161145287; UID 1000; state: ENABLED
+D/LocalBluetoothProfileManager( 1049): LocalBluetoothProfileManager construction complete
+D/AppWidgetServiceImpl(  522): Provider info from ComponentInfo{com.google.android.apps.wellbeing/com.google.android.apps.wellbeing.widget.screentime.ScreenTimeWidgetProviderReceiver_Receiver} won't be persisted.
+D/AppWidgetServiceImpl(  522): Provider info from ComponentInfo{com.google.android.googlequicksearchbox/com.google.android.googlequicksearchbox.SearchWidgetProvider} won't be persisted.
+D/AppWidgetServiceImpl(  522): Provider info from ComponentInfo{com.google.android.googlequicksearchbox/com.google.android.apps.gsa.staticplugins.smartspace.widget.SmartspaceWidgetProvider} won't be persisted.
+D/LocalBluetoothProfileManager( 1049): Adding local A2DP profile
+D/BluetoothA2dp( 1049): Binding service...
+D/LocalBluetoothProfileManager( 1049): Adding local HEADSET profile
+D/BluetoothHeadset( 1049): Binding service...
+D/LocalBluetoothProfileManager( 1049): Adding local MAP profile
+D/BluetoothMap( 1049): Create BluetoothMap proxy object
+D/BluetoothMap( 1049): Binding service...
+D/LocalBluetoothProfileManager( 1049): Adding local OPP profile
+D/LocalBluetoothProfileManager( 1049): Adding local Hearing Aid profile
+D/StylusManager(  836): Stylus InputDevice changed: 7 virtio_input_multi_touch_4
+D/StylusManager(  836): Stylus InputDevice changed: 4 virtio_input_multi_touch_1
+D/BluetoothHearingAid( 1049): Binding service...
+W/GLSUser ( 1415): [AppCertManager] Exception while requesting key: 
+W/GLSUser ( 1415): java.io.IOException: Invalid device key response.
+W/GLSUser ( 1415): 	at oub.b(:com.google.android.gms@231818047@23.18.18 (190800-535401451):40)
+W/GLSUser ( 1415): 	at otz.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):8)
+W/GLSUser ( 1415): 	at otv.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+W/GLSUser ( 1415): 	at otx.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+W/GLSUser ( 1415): 	at otx.b(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+W/GLSUser ( 1415): 	at abxk.r(:com.google.android.gms@231818047@23.18.18 (190800-535401451):1)
+W/GLSUser ( 1415): 	at abxw.e(:com.google.android.gms@231818047@23.18.18 (190800-535401451):4)
+W/GLSUser ( 1415): 	at abxw.g(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+W/GLSUser ( 1415): 	at cyeg.a(:com.google.android.gms@231818047@23.18.18 (190800-535401451):27)
+W/GLSUser ( 1415): 	at czpd.call(:com.google.android.gms@231818047@23.18.18 (190800-535401451):78)
+W/GLSUser ( 1415): 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+W/GLSUser ( 1415): 	at aced.c(:com.google.android.gms@231818047@23.18.18 (190800-535401451):6)
+W/GLSUser ( 1415): 	at aced.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):7)
+W/GLSUser ( 1415): 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+W/GLSUser ( 1415): 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+W/GLSUser ( 1415): 	at acjn.run(:com.google.android.gms@231818047@23.18.18 (190800-535401451):0)
+W/GLSUser ( 1415): 	at java.lang.Thread.run(Thread.java:1012)
+I/AidlLazyServiceRegistrar( 4082): Process has 1 (of 1 available) client(s) in use after notification android.hardware.drm.IDrmFactory/clearkey has clients: 1
+I/servicemanager(    0): Notifying android.hardware.drm.IDrmFactory/clearkey they do (previously: don't) have clients when service is guaranteed to be in use
+I/servicemanager(    0): Notifying android.hardware.drm.IDrmFactory/clearkey they don't (previously: do) have clients when we now have no record of a client
+D/HighlightableMenu( 1049): add menu key: top_level_wellbeing
+D/HighlightableMenu( 1049): add menu key: top_level_google
+I/AidlLazyServiceRegistrar( 4082): Process has 0 (of 1 available) client(s) in use after notification android.hardware.drm.IDrmFactory/clearkey has clients: 0
+I/AidlLazyServiceRegistrar( 4082): Trying to shut down the service. No clients in use for any service in process.
+I/servicemanager(    0): Unregistering android.hardware.drm.IDrmFactory/clearkey
+D/LocalBluetoothProfileManager( 1049): Adding local HID_HOST profile
+D/BluetoothHidHost( 1049): Binding service...
+D/LocalBluetoothProfileManager( 1049): Adding local HID_DEVICE profile
+D/BluetoothHidDevice( 1049): Binding service...
+D/LocalBluetoothProfileManager( 1049): Adding local PAN profile
+D/BluetoothPan( 1049): Binding service...
+I/BpBinder(    0): onLastStrongRef automatically unlinking death recipients:
+D/LocalBluetoothProfileManager( 1049): Adding local PBAP profile
+D/BluetoothPbap( 1049): Binding service...
+I/init    (    0): Service 'vendor.drm-clearkey-service' (pid 4082) exited with status 0 oneshot service took 4.153000 seconds in background
+I/init    (    0): Sending signal 9 to service 'vendor.drm-clearkey-service' (pid 4082) process group...
+I/AidlLazyServiceRegistrar( 4082): Unregistered all clients and exiting
+I/libprocessgroup(    0): Successfully killed process cgroup uid 1013 pid 4082 in 0ms
+I/HttpGrpcBindableService( 2356): [pfd-write] DOWNLOAD COMPLETE: Downloaded 2565038 bytes from URL [https://storage.googleapis.com/captions/sound_recognition_v1.zip].
+E/AstreaHttpConnection( 1654): Service error while downloading from url='https://storage.googleapis.com/captions/sound_recognition_v1.zip'
+E/AstreaHttpConnection( 1654): qhi: CANCELLED: Client cancelled.
+E/AstreaHttpConnection( 1654): 	at qhg.i(Unknown Source:2)
+E/AstreaHttpConnection( 1654): 	at qur.Q(PG:2)
+E/AstreaHttpConnection( 1654): 	at qkv.a(PG:3)
+E/AstreaHttpConnection( 1654): 	at qlo.run(PG:2)
+E/AstreaHttpConnection( 1654): 	at qqt.run(PG:2)
+E/AstreaHttpConnection( 1654): 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+E/AstreaHttpConnection( 1654): 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+E/AstreaHttpConnection( 1654): 	at java.lang.Thread.run(Thread.java:1012)
+D/ControlsListingControllerImpl(  836): ServiceConfig reloaded, count: 0
+I/logd    (    0): logdr: UID=2000 GID=2000 PID=4348 n tail=0 logMask=99 pid=0 start=0ns deadline=0ns
+D/BluetoothA2dp( 1049): Proxy object connected
+D/BluetoothHeadset( 1049): Proxy object connected
+D/BluetoothMap( 1049): Proxy object connected
+D/StylusManager(  836): Stylus InputDevice changed: 14 virtio_input_multi_touch_11
+I/FastPair( 1498): ServiceBindHelper.onSlicePinned, slice already pinned, uri = content://com.google.android.gms.nearby.fastpair/method_bind_service_for_discovery_item?is_bind=false
+D/BluetoothMap( 1049): getConnectedDevices()
+D/StylusManager(  836): Stylus InputDevice changed: 12 virtio_input_multi_touch_9
+D/StylusManager(  836): Stylus InputDevice changed: 11 virtio_input_multi_touch_8
+I/InputReader(  522): Reconfiguring input devices, changes=KEYBOARD_LAYOUTS
+D/BluetoothHearingAid( 1049): Proxy object connected
+D/BluetoothHidHost( 1049): Proxy object connected
+D/BluetoothHidDevice( 1049): Proxy object connected
+D/BluetoothPan( 1049): Proxy object connected
+D/BluetoothPbap( 1049): Proxy object connected
+W/GLSUser ( 1415): [DeviceKeyStore] Cannot load key: Device key file not found.
+I/PermissionControllerServiceImpl(  838): Updating user sensitive for uid 10186
+I/resolv  (  335): GetAddrInfoHandler::run: {100 786532 100 983140 10131 0}
+D/StylusManager(  836): Stylus InputDevice changed: 13 virtio_input_multi_touch_10
+D/StylusManager(  836): Stylus InputDevice changed: 10 virtio_input_multi_touch_7
+I/resolv  (  335): res_nmkquery: (QUERY, IN, AAAA)
+I/resolv  (  335): res_nmkquery: (QUERY, IN, A)
+D/OomAdjuster(  522): Not killing cached processes
++ exit 1
